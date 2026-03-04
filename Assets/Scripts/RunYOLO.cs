@@ -34,6 +34,9 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Change this to the name of the video you put in the Assets/StreamingAssets folder")]
     public string videoFilename = "giraffes.mp4";
 
+    [Tooltip("Check this if using with AR Foundation")]
+    public bool isARMode = false;
+
     const BackendType backend = BackendType.GPUCompute;
 
     private Transform displayLocation;
@@ -45,8 +48,6 @@ public class RunYOLO : MonoBehaviour
     //Image size for the model
     private const int imageWidth = 640;
     private const int imageHeight = 640;
-
-    private VideoPlayer video;
 
     List<GameObject> boxPool = new();
 
@@ -72,7 +73,10 @@ public class RunYOLO : MonoBehaviour
     void Start()
     {
         Application.targetFrameRate = 60;
-        Screen.orientation = ScreenOrientation.LandscapeLeft;
+        if (!isARMode)
+        {
+            Screen.orientation = ScreenOrientation.LandscapeLeft;
+        }
 
         //Parse neural net labels
         labels = classesAsset.text.Split('\n');
@@ -83,8 +87,6 @@ public class RunYOLO : MonoBehaviour
 
         //Create image to display video
         displayLocation = displayImage.transform;
-
-        SetupInput();
 
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
     }
@@ -137,38 +139,30 @@ public class RunYOLO : MonoBehaviour
         worker = new Worker(graph.Compile(coords, labelIDs), backend);
     }
 
-    void SetupInput()
-    {
-        video = gameObject.AddComponent<VideoPlayer>();
-        video.renderMode = VideoRenderMode.APIOnly;
-        video.source = VideoSource.Url;
-        video.url = Path.Join(Application.streamingAssetsPath, videoFilename);
-        video.isLooping = true;
-        video.Play();
-    }
 
-    private void Update()
-    {
-        ExecuteML();
-
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            Application.Quit();
-        }
-    }
-
-    public void ExecuteML()
+    // 오버로딩: 외부(AR)에서 텍스처를 받아 실행
+    public void ExecuteML(Texture sourceTexture)
     {
         ClearAnnotations(); // 1. 이전 프레임에서 그려진 박스들을 모두 비활성화하여 화면을 깨끗이 비웁니다.
 
-        if (video && video.texture) // 2. 비디오 플레이어가 존재하고, 현재 재생 중인 텍스처(영상 프레임)가 있는지 확인합니다.
-        {
-            float aspect = video.width * 1f / video.height; // 3. 원본 영상의 가로세로 비율(Aspect Ratio)을 계산합니다.
-            // 4. 영상을 모델 입력 크기(640x640)에 맞게 Blit(복사)합니다. 비율을 유지하며 targetRT에 그립니다.
-            Graphics.Blit(video.texture, targetRT, new Vector2(1f / aspect, 1), new Vector2(0, 0));
-            displayImage.texture = targetRT; // 5. 모델로 들어가는 정사각 이미지를 사용자 화면(RawImage)에도 보여줍니다.
-        }
-        else return; // 비디오 준비가 안 됐다면 함수를 종료합니다.
+            if (sourceTexture)
+            {
+                Graphics.Blit(sourceTexture, targetRT);
+
+                // AR 모드가 아닐 때만 디버그용으로 화면에 텍스처를 띄웁니다. 
+                // AR일 때는 실제 카메라 화면(ARBackground) 위에 박스만 그려야 하므로 텍스처를 덮어씌우지 않습니다.
+                if (!isARMode)
+                {
+                    displayImage.texture = targetRT;
+                }
+            }
+            else return; // 비디오 준비가 안 됐다면 함수를 종료합니다.
+
+        RunInference();
+    }
+
+    private void RunInference()
+    {
 
         // 6. Sentis 모델에 입력할 텐서를 생성합니다. 크기는 1개 배치, 3채널(RGB), 640x640입니다.
         using Tensor<float> inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
@@ -186,9 +180,9 @@ public class RunYOLO : MonoBehaviour
         float displayWidth = displayImage.rectTransform.rect.width;
         float displayHeight = displayImage.rectTransform.rect.height;
 
-        // 12. 640x640 기준의 좌표를 실제 화면 크기에 맞추기 위한 비율(Scale)을 계산합니다.
-        float scaleX = displayWidth / imageWidth;
-        float scaleY = displayHeight / imageHeight;
+        // 수정: 이미지를 강제로 늘려서(Stretch) 입력했으므로, 출력 좌표도 화면 크기에 맞춰 단순 비례식으로 복원하면 됩니다.
+        float scaleX = displayWidth / (float)imageWidth;
+        float scaleY = displayHeight / (float)imageHeight;
 
         int boxesFound = output.shape[0]; // 13. 모델이 최종적으로 찾아낸 객체(박스)의 개수입니다.
 
