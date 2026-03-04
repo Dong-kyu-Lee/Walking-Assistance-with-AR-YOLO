@@ -51,7 +51,7 @@ public class ARYOLOInput : MonoBehaviour
             inputRect = new RectInt(0, 0, image.width, image.height),
             outputDimensions = new Vector2Int(image.width / downsample, image.height / downsample),
             outputFormat = TextureFormat.RGB24,
-            transformation = XRCpuImage.Transformation.MirrorY
+            transformation = XRCpuImage.Transformation.None
         };
 
         // 텍스처 생성 또는 재사용

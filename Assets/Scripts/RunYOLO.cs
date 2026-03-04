@@ -145,18 +145,18 @@ public class RunYOLO : MonoBehaviour
     {
         ClearAnnotations(); // 1. 이전 프레임에서 그려진 박스들을 모두 비활성화하여 화면을 깨끗이 비웁니다.
 
-            if (sourceTexture)
-            {
-                Graphics.Blit(sourceTexture, targetRT);
+        if (sourceTexture)
+        {
+            Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
 
-                // AR 모드가 아닐 때만 디버그용으로 화면에 텍스처를 띄웁니다. 
-                // AR일 때는 실제 카메라 화면(ARBackground) 위에 박스만 그려야 하므로 텍스처를 덮어씌우지 않습니다.
-                if (!isARMode)
-                {
-                    displayImage.texture = targetRT;
-                }
+            // AR 모드가 아닐 때만 디버그용으로 화면에 텍스처를 띄웁니다. 
+            // AR일 때는 실제 카메라 화면(ARBackground) 위에 박스만 그려야 하므로 텍스처를 덮어씌우지 않습니다.
+            if (!isARMode)
+            {
+                displayImage.texture = targetRT;
             }
-            else return; // 비디오 준비가 안 됐다면 함수를 종료합니다.
+        }
+        else return; // 비디오 준비가 안 됐다면 함수를 종료합니다.
 
         RunInference();
     }
