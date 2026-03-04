@@ -277,4 +277,9 @@ public class RunYOLO : MonoBehaviour
         centersToCorners?.Dispose();
         worker?.Dispose();
     }
+
+    void Update()
+    {
+
+    }
 }
