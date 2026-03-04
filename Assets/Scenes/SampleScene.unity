@@ -4923,7 +4923,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37c1c9b68112c3b4497008bb6660f6fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RunYOLO
-  modelAsset: {fileID: 5022602860645237092, guid: b6abeebdf253b8444b0227ea6f57ec17, type: 3}
+  modelAsset: {fileID: 5022602860645237092, guid: 75e3ca83aecdd11459f83632526e35f9, type: 3}
   classesAsset: {fileID: 4900000, guid: be06d90b2fb6f2e438fd84afc7af9630, type: 3}
   displayImage: {fileID: 204219536}
   borderTexture: {fileID: 2800000, guid: c9d350aff2de5774db4aba2482e1dff1, type: 3}
