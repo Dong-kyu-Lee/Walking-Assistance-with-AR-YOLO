@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Unity.InferenceEngine;
@@ -45,6 +46,9 @@ public class RunYOLO : MonoBehaviour
     private RenderTexture targetRT;
     private Sprite borderSprite;
 
+    // [추가] 매번 할당하지 않고 재사용할 입력 텐서
+    private Tensor<float> inputTensor;
+
     //Image size for the model
     private const int imageWidth = 640;
     private const int imageHeight = 640;
@@ -84,6 +88,8 @@ public class RunYOLO : MonoBehaviour
         LoadModel();
 
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
+
+        inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
 
         //Create image to display video
         displayLocation = displayImage.transform;
@@ -139,66 +145,69 @@ public class RunYOLO : MonoBehaviour
         worker = new Worker(graph.Compile(coords, labelIDs), backend);
     }
 
+    void OnDestroy()
+    {
+        centersToCorners?.Dispose();
+        worker?.Dispose();
+        // [추가] 사용이 끝난 텐서는 앱 종료 시 수동으로 메모리 해제
+        inputTensor?.Dispose(); 
+    }
+
 
     // 오버로딩: 외부(AR)에서 텍스처를 받아 실행
-    public void ExecuteML(Texture sourceTexture)
+    public IEnumerator ExecuteML(Texture sourceTexture)
     {
         ClearAnnotations(); // 1. 이전 프레임에서 그려진 박스들을 모두 비활성화하여 화면을 깨끗이 비웁니다.
 
-        if (sourceTexture)
+        if (sourceTexture == null) yield break;
+
+        // 1. 텍스쳐 준비
+        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+        if (!isARMode) displayImage.texture = targetRT;
+        
+        // 2. 입력 텐서 생성 및 추론 예약
+        TextureConverter.ToTensor(targetRT, inputTensor, default);
+        // Schedule은 GPU에 일감을 던져만 놓고 즉시 리턴합니다.
+        worker.Schedule(inputTensor);
+
+        var output0 = worker.PeekOutput("output_0") as Tensor<float>;
+        var output1 = worker.PeekOutput("output_1") as Tensor<int>;
+
+        // 비동기 Readback 요청. GPU의 계산이 끝나면 CPU로 데이터를 전달할 것을 요청 (비동기)
+        output0.ReadbackRequest();
+        output1.ReadbackRequest();
+
+        // GPU 작업이 완료될 때까지 메인 스레드를 멈추지 않고 카메라 화면 렌더링을 계속 진행
+        while (!output0.IsReadbackRequestDone() || !output1.IsReadbackRequestDone())
         {
-            Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-
-            // AR 모드가 아닐 때만 디버그용으로 화면에 텍스처를 띄웁니다. 
-            // AR일 때는 실제 카메라 화면(ARBackground) 위에 박스만 그려야 하므로 텍스처를 덮어씌우지 않습니다.
-            if (!isARMode)
-            {
-                displayImage.texture = targetRT;
-            }
+            yield return null; 
         }
-        else return; // 비디오 준비가 안 됐다면 함수를 종료합니다.
 
-        RunInference();
+        using var readableOutput = output0.ReadbackAndClone();
+        using var readableLabelIDs = output1.ReadbackAndClone();
+
+        ProcessResults(readableOutput, readableLabelIDs);
     }
 
-    private void RunInference()
+    private void ProcessResults(Tensor<float> output, Tensor<int> labelIDs)
     {
 
-        // 6. Sentis 모델에 입력할 텐서를 생성합니다. 크기는 1개 배치, 3채널(RGB), 640x640입니다.
-        using Tensor<float> inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
-        // 7. 유니티의 RenderTexture(targetRT) 데이터를 방금 만든 텐서(inputTensor) 형식으로 변환하여 채웁니다.
-        TextureConverter.ToTensor(targetRT, inputTensor, default);
-
-        worker.Schedule(inputTensor); // 8. Worker(추론 엔진)에 입력 데이터를 전달하고 GPU 연산을 시작합니다.
-
-        // 9. 모델의 첫 번째 출력(박스 좌표 정보)을 가져와 CPU에서 읽을 수 있게 복사본을 만듭니다.
-        using var output = (worker.PeekOutput("output_0") as Tensor<float>).ReadbackAndClone();
-        // 10. 모델의 두 번째 출력(객체의 클래스 ID, 예: '사람', '기린')을 가져와 복사본을 만듭니다.
-        using var labelIDs = (worker.PeekOutput("output_1") as Tensor<int>).ReadbackAndClone();
-
-        // 11. 현재 화면 UI(RawImage)의 실제 가로/세로 길이를 구합니다.
         float displayWidth = displayImage.rectTransform.rect.width;
         float displayHeight = displayImage.rectTransform.rect.height;
-
-        // 수정: 이미지를 강제로 늘려서(Stretch) 입력했으므로, 출력 좌표도 화면 크기에 맞춰 단순 비례식으로 복원하면 됩니다.
         float scaleX = displayWidth / (float)imageWidth;
         float scaleY = displayHeight / (float)imageHeight;
 
-        int boxesFound = output.shape[0]; // 13. 모델이 최종적으로 찾아낸 객체(박스)의 개수입니다.
-
-        // 14. 찾아낸 박스들을 루프를 돌며 화면에 그립니다. (최대 200개 제한)
+        int boxesFound = output.shape[0];
         for (int n = 0; n < Mathf.Min(boxesFound, 200); n++)
         {
             var box = new BoundingBox
             {
-                // 15. 좌표 변환: 모델 좌표에 스케일을 곱하고, 유니티 UI 중심점(Center) 기준으로 위치를 보정합니다.
                 centerX = output[n, 0] * scaleX - displayWidth / 2,
                 centerY = output[n, 1] * scaleY - displayHeight / 2,
                 width = output[n, 2] * scaleX,
                 height = output[n, 3] * scaleY,
-                label = labels[labelIDs[n]], // 16. 클래스 ID 번호를 이용해 실제 이름(예: "giraffe")을 가져옵니다.
+                label = labels[labelIDs[n]],
             };
-            // 17. 최종적으로 계산된 box 데이터를 이용해 화면에 사각형과 텍스트를 실제로 그립니다.
             DrawBox(box, n, displayHeight * 0.05f);
         }
     }
@@ -270,11 +279,5 @@ public class RunYOLO : MonoBehaviour
         {
             box.SetActive(false);
         }
-    }
-
-    void OnDestroy()
-    {
-        centersToCorners?.Dispose();
-        worker?.Dispose();
     }
 }

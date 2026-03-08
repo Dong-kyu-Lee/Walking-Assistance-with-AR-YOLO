@@ -42,17 +42,51 @@ public class ARYOLOInput : MonoBehaviour
             return;
         }
 
-        // 이미지 변환 설정
-        int downsample = 1;
-        if (image.width > 1000) downsample = 2;
+        // 중복 실행 방지 (n 프레임마다 실행되도록 함)
+        isProcessing = true;
+
+        StartCoroutine(ProcessImageAndRunInference(image));
+    }
+
+    private IEnumerator ProcessImageAndRunInference(XRCpuImage image)
+    {
+        // 이미지 크개를 YOLO 모델 입력 사이즈(640)에 맞춰 최적화
+        float ratio = (float)image.width / image.height;
+        int targetWidth = 640;
+        int targetHeight = Mathf.RoundToInt(640/ratio);
+
+        // 가로 해상도가 640 이하라면 원본 크기 유지
+        if (image.width < 640)
+        {
+            targetWidth = image.width;
+            targetHeight = image.height;
+        }
 
         var conversionParams = new XRCpuImage.ConversionParams
         {
             inputRect = new RectInt(0, 0, image.width, image.height),
-            outputDimensions = new Vector2Int(image.width / downsample, image.height / downsample),
+            outputDimensions = new Vector2Int(targetWidth, targetHeight),
             outputFormat = TextureFormat.RGB24,
             transformation = XRCpuImage.Transformation.None
         };
+
+        // AR 카메라 이미지를 '비동기'로 텍스처 데이터로 변환 요청
+        var request = image.ConvertAsync(conversionParams);
+
+        // 변환이 끝날 때까지 메인 스레드(화면 렌더링)를 멈추지 않고 프레임 양보
+        while (!request.status.IsDone())
+        {
+            yield return null;
+        }
+
+        // 혹시 에러가 났다면 리소스 정리 후 종료
+        if (request.status != XRCpuImage.AsyncConversionStatus.Ready)
+        {
+            image.Dispose();
+            request.Dispose();
+            isProcessing = false;
+            yield break; 
+        }
 
         // 텍스처 생성 또는 재사용
         if (cameraTexture == null || cameraTexture.width != conversionParams.outputDimensions.x || cameraTexture.height != conversionParams.outputDimensions.y)
@@ -62,23 +96,17 @@ public class ARYOLOInput : MonoBehaviour
 
         // 원시 데이터로 변환
         var rawTextureData = cameraTexture.GetRawTextureData<byte>();
-        image.Convert(conversionParams, rawTextureData);
-        image.Dispose(); // 중요: 사용 후 이미지 리소스 해제
+        request.GetData<byte>().CopyTo(rawTextureData); // 백그라운드에서 변환된 데이터를 텍스처로 복사
 
-        // 텍스처 GPU 업로드
+        // 텍스처 GPU 업로드 (동기적)
         cameraTexture.Apply();
 
-        // 2. 코루틴을 시작하여 YOLO 추론을 실행하고 지정된 프레임만큼 대기
-        StartCoroutine(ProcessAndSkipFrames());
-    }
-
-    private IEnumerator ProcessAndSkipFrames()
-    {
-        // 플래그를 true로 설정하여 대기 시간 동안 새로운 프레임을 처리하지 않도록 잠금
-        isProcessing = true;
+        // 사용 끝난 원본 이미지와 리퀘스트 즉시 메모리 해제 (메모리 누수 방지)
+        image.Dispose();
+        request.Dispose();
 
         // YOLO 추론 실행
-        yoloProcessor.ExecuteML(cameraTexture);
+        yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
 
         // 사용자가 설정한 inferenceInterval 프레임 수만큼 대기
         for (int i = 0; i < inferenceInterval; i++)
