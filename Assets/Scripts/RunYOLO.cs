@@ -1,19 +1,13 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using Unity.InferenceEngine;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.Video;
-
-/*
- *  YOLO Inference Script
- *  ========================
- *
- * Place this script on the Main Camera and set the script parameters according to the tooltips.
- *
- */
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Burst;
+using Unity.Mathematics;
 
 public class RunYOLO : MonoBehaviour
 {
@@ -46,7 +40,6 @@ public class RunYOLO : MonoBehaviour
     private RenderTexture targetRT;
     private Sprite borderSprite;
 
-    // [추가] 매번 할당하지 않고 재사용할 입력 텐서
     private Tensor<float> inputTensor;
 
     //Image size for the model
@@ -63,8 +56,6 @@ public class RunYOLO : MonoBehaviour
     [SerializeField, Range(0, 1)]
     float scoreThreshold = 0.5f;
 
-    Tensor<float> centersToCorners;
-    //bounding box data
     public struct BoundingBox
     {
         public float centerX;
@@ -77,162 +68,135 @@ public class RunYOLO : MonoBehaviour
     void Start()
     {
         Application.targetFrameRate = 60;
-        if (!isARMode)
-        {
-            Screen.orientation = ScreenOrientation.LandscapeLeft;
-        }
+        if (!isARMode) Screen.orientation = ScreenOrientation.LandscapeLeft;
 
-        //Parse neural net labels
         labels = classesAsset.text.Split('\n');
-
         LoadModel();
 
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
-
         inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
 
-        //Create image to display video
         displayLocation = displayImage.transform;
-
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
     }
+
     void LoadModel()
     {
-        //Load model
-        // 1. 에디터에서 할당한 .onnx 파일을 Sentis가 이해할 수 있는 모델 객체로 메모리에 올립니다.
-        var model1 = ModelLoader.Load(modelAsset);
-
-        // 2. YOLO의 중심점 기반 좌표(Center X, Y, W, H)를 사각형의 모서리 좌표(Min X, Y, Max X, Y)로 
-        // 변환하기 위한 수학적 계산용 행렬(Tensor)을 만듭니다. (NMS 연산에 필요)
-        centersToCorners = new Tensor<float>(new TensorShape(4, 4),
-        new float[]
-        {
-                1,      0,      1,      0,
-                0,      1,      0,      1,
-                -0.5f,  0,      0.5f,   0,
-                0,      -0.5f,  0,      0.5f
-        });
-
-        //Here we transform the output of the model1 by feeding it through a Non-Max-Suppression layer.
-        // 3. 기존 모델에 새로운 연산 기능을 추가하기 위한 '작업 그래프'를 생성합니다.
-        var graph = new FunctionalGraph();
-        // 4. 원본 모델(model1)의 입력 계층을 그래프에 등록합니다.
-        var inputs = graph.AddInputs(model1);
-        // 5. 원본 모델에 데이터를 흘려보냈을 때 나오는 첫 번째 결과물(Raw Output)을 정의합니다.
-        // YOLOv8n의 경우 보통 (1, 84, 8400) 형태의 데이터가 나옵니다.
-        var modelOutput = Functional.Forward(model1, inputs)[0];                        //shape=(1,84,8400)
-        // 6. 데이터 분리: 84개의 정보 중 앞의 4개(0~3)는 박스 좌표(Box Coords)입니다.
-        var boxCoords = modelOutput[0, 0..4, ..].Transpose(0, 1);                       //shape=(8400,4)
-        // 7. 데이터 분리: 나머지 80개(4~83)는 각 클래스(사물 종류)에 대한 확률 점수입니다.
-        var allScores = modelOutput[0, 4.., ..];                                        //shape=(80,8400)
-        // 8. 가장 높은 점수를 찾고, 그 점수가 어떤 클래스(ID)인지 계산합니다.
-        var scores = Functional.ReduceMax(allScores, 0);                                //shape=(8400)
-        var classIDs = Functional.ArgMax(allScores, 0);                                 //shape=(8400)
-
-        // 비최대 억제(NMS) 적용
-        // 9. 앞서 만든 행렬(centersToCorners)을 곱해 중심점 좌표를 모서리 좌표로 변환합니다. (NMS 함수의 요구 조건)
-        var boxCorners = Functional.MatMul(boxCoords, Functional.Constant(centersToCorners));   //shape=(8400,4)
-        // 10. Sentis의 NMS 기능을 사용하여 중복된 박스를 제거하고 가장 확실한 박스의 인덱스만 남깁니다.
-        // 설정한 iouThreshold와 scoreThreshold가 여기서 사용됩니다.
-        var indices = Functional.NMS(boxCorners, scores, iouThreshold, scoreThreshold); //shape=(N)
-        // 11. 최종 선택된 인덱스에 해당하는 좌표(coords)와 클래스 ID(labelIDs)만 골라냅니다.
-        var coords = Functional.IndexSelect(boxCoords, 0, indices);                     //shape=(N,4)
-        var labelIDs = Functional.IndexSelect(classIDs, 0, indices);                    //shape=(N)
-
-        //Create worker to run model
-        // 12. 지금까지 설계한 '개조된 그래프'를 컴파일하여 실제 실행 가능한 형태로 만듭니다.
-        // 결과적으로 이 모델은 영상 입력 시 [박스 좌표들, 클래스 ID들] 두 가지를 딱 내뱉게 됩니다.
-        worker = new Worker(graph.Compile(coords, labelIDs), backend);
+        // 💡 [핵심 변경점] Sentis의 복잡한 그래프 Slicing 제거! 
+        // 모델을 원본 그대로 로드하고 즉시 Worker에 할당합니다.
+        var model = ModelLoader.Load(modelAsset);
+        worker = new Worker(model, backend);
     }
 
     void OnDestroy()
     {
-        centersToCorners?.Dispose();
         worker?.Dispose();
-        // [추가] 사용이 끝난 텐서는 앱 종료 시 수동으로 메모리 해제
-        inputTensor?.Dispose(); 
+        inputTensor?.Dispose();
     }
 
-
-    // 오버로딩: 외부(AR)에서 텍스처를 받아 실행
     public IEnumerator ExecuteML(Texture sourceTexture)
     {
-        ClearAnnotations(); // 1. 이전 프레임에서 그려진 박스들을 모두 비활성화하여 화면을 깨끗이 비웁니다.
+        ClearAnnotations();
 
         if (sourceTexture == null) yield break;
 
-        // 1. 텍스쳐 준비
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
         if (!isARMode) displayImage.texture = targetRT;
-        
-        // 2. 입력 텐서 생성 및 추론 예약
+
         TextureConverter.ToTensor(targetRT, inputTensor, default);
-        // Schedule은 GPU에 일감을 던져만 놓고 즉시 리턴합니다.
         worker.Schedule(inputTensor);
 
-        var output0 = worker.PeekOutput("output_0") as Tensor<float>;
-        var output1 = worker.PeekOutput("output_1") as Tensor<int>;
+        // 1. 단 하나의 원본 출력 텐서만 가져오기
+        var outputTensor = worker.PeekOutput() as Tensor<float>;
+        outputTensor.ReadbackRequest();
 
-        // 비동기 Readback 요청. GPU의 계산이 끝나면 CPU로 데이터를 전달할 것을 요청 (비동기)
-        output0.ReadbackRequest();
-        output1.ReadbackRequest();
-
-        // GPU 작업이 완료될 때까지 메인 스레드를 멈추지 않고 카메라 화면 렌더링을 계속 진행
-        while (!output0.IsReadbackRequestDone() || !output1.IsReadbackRequestDone())
+        while (!outputTensor.IsReadbackRequestDone())
         {
-            yield return null; 
+            yield return null;
         }
 
-        using var readableOutput = output0.ReadbackAndClone();
-        using var readableLabelIDs = output1.ReadbackAndClone();
+        // 2. 모델의 형태(Shape)를 동적으로 파악
+        // (YOLO 모델에 따라 [1, 84, 8400] 형태일 수도, [1, 8400, 84] 형태일 수도 있음)
+        var shape = outputTensor.shape;
+        int dim1 = shape.rank > 1 ? shape[shape.rank - 2] : 1;
+        int dim2 = shape.rank > 0 ? shape[shape.rank - 1] : 1;
 
-        ProcessResults(readableOutput, readableLabelIDs);
+        // 더 긴 쪽이 앵커(박스) 개수, 짧은 쪽이 속성(4개 좌표 + N개 클래스)
+        int numAnchors = math.max(dim1, dim2);
+        int numAttributes = math.min(dim1, dim2);
+        int numClasses = numAttributes - 4;
+        bool isTransposed = (dim1 == numAnchors);
+
+        // 3. 네이티브 배열 다운로드
+        var outputData = outputTensor.DownloadToNativeArray();
+
+        // Job에서 파싱된 결과를 바로 담을 리스트 (좌표, 점수, 클래스ID가 하나로 통합됨)
+        var resultBoxes = new NativeList<BoxData>(Allocator.TempJob);
+
+        try
+        {
+            var nmsJob = new NMSJob
+            {
+                outputData = outputData,
+                numAnchors = numAnchors,
+                numClasses = numClasses,
+                isTransposed = isTransposed,
+                iouThreshold = iouThreshold,
+                scoreThreshold = scoreThreshold,
+                resultBoxes = resultBoxes
+            };
+
+            nmsJob.Schedule().Complete();
+
+            ProcessResults(resultBoxes);
+        }
+        finally
+        {
+            // 메모리 누수 완벽 방지
+            if (resultBoxes.IsCreated) resultBoxes.Dispose();
+            if (outputData.IsCreated) outputData.Dispose();
+        }
     }
 
-    private void ProcessResults(Tensor<float> output, Tensor<int> labelIDs)
+    private void ProcessResults(NativeList<BoxData> resultBoxes)
     {
-
         float displayWidth = displayImage.rectTransform.rect.width;
         float displayHeight = displayImage.rectTransform.rect.height;
         float scaleX = displayWidth / (float)imageWidth;
         float scaleY = displayHeight / (float)imageHeight;
 
-        int boxesFound = output.shape[0];
-        for (int n = 0; n < Mathf.Min(boxesFound, 200); n++)
+        int boxesFound = math.min(resultBoxes.Length, 200);
+
+        for (int i = 0; i < boxesFound; i++)
         {
+            var b = resultBoxes[i];
+
             var box = new BoundingBox
             {
-                centerX = output[n, 0] * scaleX - displayWidth / 2,
-                centerY = output[n, 1] * scaleY - displayHeight / 2,
-                width = output[n, 2] * scaleX,
-                height = output[n, 3] * scaleY,
-                label = labels[labelIDs[n]],
+                centerX = b.cx * scaleX - displayWidth / 2,
+                centerY = b.cy * scaleY - displayHeight / 2,
+                width = b.w * scaleX,
+                height = b.h * scaleY,
+                label = (b.classID >= 0 && b.classID < labels.Length) ? labels[b.classID] : "Unknown",
             };
-            DrawBox(box, n, displayHeight * 0.05f);
+            DrawBox(box, i, displayHeight * 0.05f);
         }
     }
 
     public void DrawBox(BoundingBox box, int id, float fontSize)
     {
-        //Create the bounding box graphic or get from pool
         GameObject panel;
         if (id < boxPool.Count)
         {
             panel = boxPool[id];
             panel.SetActive(true);
         }
-        else
-        {
-            panel = CreateNewBox(Color.yellow);
-        }
-        //Set box position
-        panel.transform.localPosition = new Vector3(box.centerX, -box.centerY);
+        else panel = CreateNewBox(Color.yellow);
 
-        //Set box size
+        panel.transform.localPosition = new Vector3(box.centerX, -box.centerY);
         RectTransform rt = panel.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(box.width, box.height);
 
-        //Set label text
         var label = panel.GetComponentInChildren<Text>();
         label.text = box.label;
         label.fontSize = (int)fontSize;
@@ -240,8 +204,6 @@ public class RunYOLO : MonoBehaviour
 
     public GameObject CreateNewBox(Color color)
     {
-        //Create the box and set image
-
         var panel = new GameObject("ObjectBox");
         panel.AddComponent<CanvasRenderer>();
         Image img = panel.AddComponent<Image>();
@@ -249,8 +211,6 @@ public class RunYOLO : MonoBehaviour
         img.sprite = borderSprite;
         img.type = Image.Type.Sliced;
         panel.transform.SetParent(displayLocation, false);
-
-        //Create the label
 
         var text = new GameObject("ObjectLabel");
         text.AddComponent<CanvasRenderer>();
@@ -275,9 +235,144 @@ public class RunYOLO : MonoBehaviour
 
     public void ClearAnnotations()
     {
-        foreach (var box in boxPool)
+        foreach (var box in boxPool) box.SetActive(false);
+    }
+}
+
+// Job System 전용 경계 상자 구조체
+public struct BoxData
+{
+    public float cx, cy, w, h;
+    public int classID;
+    public float score;
+}
+
+[BurstCompile]
+public struct NMSJob : IJob
+{
+    [ReadOnly] public NativeArray<float> outputData;
+
+    public int numAnchors;
+    public int numClasses;
+    public bool isTransposed;
+
+    public float iouThreshold;
+    public float scoreThreshold;
+
+    public NativeList<BoxData> resultBoxes;
+
+    public void Execute()
+    {
+        // 1. 임계치를 넘는 후보군 추출
+        NativeList<BoxData> candidates = new NativeList<BoxData>(numAnchors, Allocator.Temp);
+
+        for (int a = 0; a < numAnchors; a++)
         {
-            box.SetActive(false);
+            float maxScore = -1f;
+            int bestClassID = -1;
+
+            // 각 앵커에 대해 가장 높은 클래스 점수 찾기
+            for (int c = 0; c < numClasses; c++)
+            {
+                // 데이터 배열이 가로로 긴지 세로로 긴지에 따라 인덱스 접근 방식 변경
+                float score = isTransposed
+                    ? outputData[a * (numClasses + 4) + (c + 4)]
+                    : outputData[(c + 4) * numAnchors + a];
+
+                if (score > maxScore)
+                {
+                    maxScore = score;
+                    bestClassID = c;
+                }
+            }
+
+            if (maxScore >= scoreThreshold)
+            {
+                BoxData box = new BoxData();
+                box.score = maxScore;
+                box.classID = bestClassID;
+
+                // 좌표 데이터 추출 (첫 4개 원소)
+                if (isTransposed)
+                {
+                    int baseIdx = a * (numClasses + 4);
+                    box.cx = outputData[baseIdx + 0];
+                    box.cy = outputData[baseIdx + 1];
+                    box.w = outputData[baseIdx + 2];
+                    box.h = outputData[baseIdx + 3];
+                }
+                else
+                {
+                    box.cx = outputData[0 * numAnchors + a];
+                    box.cy = outputData[1 * numAnchors + a];
+                    box.w = outputData[2 * numAnchors + a];
+                    box.h = outputData[3 * numAnchors + a];
+                }
+
+                candidates.Add(box);
+            }
         }
+
+        // 2. NMS (비최대 억제) 루프 실행
+        while (candidates.Length > 0)
+        {
+            int maxIdx = 0;
+            float maxScore = -1f;
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                if (candidates[i].score > maxScore)
+                {
+                    maxScore = candidates[i].score;
+                    maxIdx = i;
+                }
+            }
+
+            BoxData bestBox = candidates[maxIdx];
+            resultBoxes.Add(bestBox);
+
+            float bMinX = bestBox.cx - bestBox.w / 2f;
+            float bMinY = bestBox.cy - bestBox.h / 2f;
+            float bMaxX = bestBox.cx + bestBox.w / 2f;
+            float bMaxY = bestBox.cy + bestBox.h / 2f;
+            float bArea = bestBox.w * bestBox.h;
+
+            for (int i = candidates.Length - 1; i >= 0; i--)
+            {
+                if (i == maxIdx)
+                {
+                    candidates.RemoveAtSwapBack(i);
+                    continue;
+                }
+
+                BoxData cBox = candidates[i];
+                if (cBox.classID != bestBox.classID) continue;
+
+                float cMinX = cBox.cx - cBox.w / 2f;
+                float cMinY = cBox.cy - cBox.h / 2f;
+                float cMaxX = cBox.cx + cBox.w / 2f;
+                float cMaxY = cBox.cy + cBox.h / 2f;
+                float cArea = cBox.w * cBox.h;
+
+                float interMinX = math.max(bMinX, cMinX);
+                float interMinY = math.max(bMinY, cMinY);
+                float interMaxX = math.min(bMaxX, cMaxX);
+                float interMaxY = math.min(bMaxY, cMaxY);
+
+                float interW = math.max(0, interMaxX - interMinX);
+                float interH = math.max(0, interMaxY - interMinY);
+                float interArea = interW * interH;
+
+                float unionArea = bArea + cArea - interArea;
+                float iou = unionArea > 0f ? interArea / unionArea : 0f;
+
+                if (iou >= iouThreshold)
+                {
+                    candidates.RemoveAtSwapBack(i);
+                }
+            }
+        }
+
+        candidates.Dispose();
     }
 }
