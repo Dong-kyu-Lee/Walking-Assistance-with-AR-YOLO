@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
-using static System.Math;
 
 public class RouteResponse
 {
@@ -24,44 +22,19 @@ public class Geometry
     public JArray coordinates;
 }
 
-public class CoordinateConverter
-{
-    // 지구의 반지름 (미터)
-    private const double EarthRadius = 6371000f;
-
-    // 기준점(Unity World의 0,0,0이 될 실제 GPS 좌표)
-    private double originLon;
-    private double originLat;
-
-    public CoordinateConverter(double originLon, double originLat)
-    {
-        this.originLon = originLon;
-        this.originLat = originLat;
-    }
-
-    // GPS [경도, 위도]를 Unity Vector3 (X, 0, Z)로 변환 (간이 공식)
-    public Vector3 ConvertGpsToVector3(double targetLon, double targetLat)
-    {
-        // 위도/경도를 라디안으로 변환
-        double lat1 = originLat * (Math.PI / 180);
-        double lat2 = targetLat * (Math.PI / 180);
-        double deltaLat = (targetLat - originLat) * (Math.PI / 180);
-        double deltaLon = (targetLon - originLon) * (Math.PI / 180);
-
-        // X축 거리 (경도 차이)
-        double x = deltaLon * EarthRadius * Math.Cos((lat1 + lat2) / 2.0f);
-        // Z축 거리 (위도 차이)
-        double z = deltaLat * EarthRadius;
-
-        // Y축(높이)은 고도 데이터가 없다면 일단 0 또는 기준 바닥 높이로 설정
-        return new Vector3((float)x, 0f, (float)z);
-    }
-}
-
-
 public class TMapRouterDrawing : MonoBehaviour
 {
+    private LineRenderer _lineRenderer;
+
     public List<Vector3> routePathPoints = new List<Vector3>();
+
+    private void Start()
+    {
+        _lineRenderer = GetComponent<LineRenderer>();
+        _lineRenderer.positionCount = 0;
+        _lineRenderer.startWidth = 0.1f;
+        _lineRenderer.endWidth = 0.1f;
+    }
 
     public void ParseRouteData(string jsonResponse, double startLon, double startLat)
     {
@@ -94,6 +67,8 @@ public class TMapRouterDrawing : MonoBehaviour
         foreach(Vector3 point in routePathPoints.Take<Vector3>(10))
         {
             Debug.Log(point);
+            _lineRenderer.positionCount++;
+            _lineRenderer.SetPosition(_lineRenderer.positionCount - 1, point);
         }
     }
 }

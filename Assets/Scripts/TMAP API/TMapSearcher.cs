@@ -28,6 +28,10 @@ public class TMapSearcher : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _nameText;
     [SerializeField] private TextMeshProUGUI _printText;
 
+    [Header("Debug Value")]
+    [SerializeField] private string _originName;
+    [SerializeField] private string _destName;
+
     private bool _enabled = false;
 
     private string startX;
@@ -39,7 +43,13 @@ public class TMapSearcher : MonoBehaviour
     private float _endTime;
 
     [SerializeField] private TMapRouterDrawing _tMapRouterDrawing;
+    private Vector3Converter _vector3Converter = new Vector3Converter();
+    private Transform _mainCamera;
 
+    private void Start()
+    {
+        _mainCamera = Camera.main.transform;
+    }
     private void Update()
     {
         if (startX != null && startY != null && endX != null && endY != null && _enabled == true)
@@ -49,8 +59,10 @@ public class TMapSearcher : MonoBehaviour
     {
         _startTime = Time.unscaledTime;
         _enabled = true;
-        StartCoroutine(SearchPlace(_startInputField.text, true));
-        StartCoroutine(SearchPlace(_endInputField.text, false));
+        //StartCoroutine(SearchPlace(_startInputField.text, true));
+        //StartCoroutine(SearchPlace(_endInputField.text, false));
+        StartCoroutine(SearchPlace(_originName, true));
+        StartCoroutine(SearchPlace(_destName, false));
     }
 
     IEnumerator SearchPlace(string startKeyword, bool isStart)
@@ -77,8 +89,8 @@ public class TMapSearcher : MonoBehaviour
                     // 가장 첫 번째 결과 가져오기
                     var topResult = response.searchPoiInfo.pois.poi[0];
                     Debug.Log($"검색 성공! 이름: {topResult.name}, 좌표: {topResult.frontLat}, {topResult.frontLon}");
-                    _nameText.text = topResult.name;
-                    _printText.text = $" N: {topResult.frontLat}\n E: {topResult.frontLon}";
+                    //_nameText.text = topResult.name;
+                    //_printText.text = $" N: {topResult.frontLat}\n E: {topResult.frontLon}";
 
                     // TODO: 여기서 받아온 좌표를 '보행자 경로 안내 API'의 목적지로 전달!
 
@@ -109,10 +121,16 @@ public class TMapSearcher : MonoBehaviour
 
         string url = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json";
 
+        Vector2D startCoordinate = new Vector2D();
+        if (double.TryParse(startX, out double resultX) && double.TryParse(startY, out double resultZ))
+        {
+            startCoordinate = _vector3Converter.GetCurrentCameraGPS(resultX, resultZ, _mainCamera.position.x, _mainCamera.position.z);
+        }
+
 
         WWWForm form = new WWWForm();
-        form.AddField("startX", startX);
-        form.AddField("startY", startY);
+        form.AddField("startX", startCoordinate.latitude.ToString());
+        form.AddField("startY", startCoordinate.longitude.ToString());
         form.AddField("endX", endX);
         form.AddField("endY", endY);
         form.AddField("startName", "출발지");
