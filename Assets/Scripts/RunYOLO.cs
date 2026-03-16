@@ -32,6 +32,8 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Check this if using with AR Foundation")]
     public bool isARMode = false;
 
+    public bool IsModelLoaded { get { return isModelLoaded; } }
+
     const BackendType backend = BackendType.GPUCompute;
 
     private Transform displayLocation;
@@ -39,6 +41,7 @@ public class RunYOLO : MonoBehaviour
     private string[] labels;
     private RenderTexture targetRT;
     private Sprite borderSprite;
+    private bool isModelLoaded = false;
 
     private Tensor<float> inputTensor;
 
@@ -78,6 +81,8 @@ public class RunYOLO : MonoBehaviour
 
         displayLocation = displayImage.transform;
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
+
+        isModelLoaded = true;
     }
 
     void LoadModel()
