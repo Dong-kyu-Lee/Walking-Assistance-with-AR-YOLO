@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -28,6 +29,8 @@ public class TMapRouterDrawing : MonoBehaviour
 
     public List<Vector3> routePathPoints = new List<Vector3>();
 
+    public List<Vector3> densePath = new List<Vector3>();
+
     private void Start()
     {
         _lineRenderer = GetComponent<LineRenderer>();
@@ -38,6 +41,7 @@ public class TMapRouterDrawing : MonoBehaviour
 
     public void ParseRouteData(string jsonResponse, double startLon, double startLat)
     {
+        PathFindingUI.instance.ShowIsLineRendered(false);
         // 1. JSON 텍스트를 C# 객체로 역직렬화
         RouteResponse response = JsonConvert.DeserializeObject<RouteResponse>(jsonResponse);
 
@@ -64,11 +68,100 @@ public class TMapRouterDrawing : MonoBehaviour
         }
 
         Debug.Log($"총 {routePathPoints.Count}개의 Vector3 경로 포인트가 추출되었습니다.");
-        foreach(Vector3 point in routePathPoints.Take<Vector3>(10))
+        /*foreach(Vector3 point in routePathPoints.Take<Vector3>(10))
         {
             Debug.Log(point);
             _lineRenderer.positionCount++;
             _lineRenderer.SetPosition(_lineRenderer.positionCount - 1, point);
+        }*/
+
+        /*foreach (Vector3 point in routePathPoints)
+        {
+            _lineRenderer.positionCount++;
+            _lineRenderer.SetPosition(_lineRenderer.positionCount - 1, point);
+        }*/
+
+        densePath.Clear();
+        densePath = InterpolatePath(routePathPoints);
+        _lineRenderer.positionCount = densePath.Count;
+        _lineRenderer.SetPositions(densePath.ToArray());
+
+        StartCoroutine(SnapToPlaneRoutine());
+
+        PathFindingUI.instance.ShowIsLineRendered(true);
+    }
+
+    IEnumerator SnapToPlaneRoutine()
+    {
+        int startIndex = 0;
+        while (true)
+        {
+            Vector3 cameraPos = Camera.main.transform.position;
+
+            // 쪼개진 전체 경로(densePath)를 돌면서 확인하되,
+            for (int i = startIndex; i < densePath.Count; i++)
+            {
+                Vector3 point = densePath[i];
+
+                // 1. 카메라와 점 사이의 거리가 5m 이내일 때만 연산 수행!
+                if (Vector3.Distance(cameraPos, point) < 5.0f)
+                {
+                    // 2. 해당 점 위치에서 아래(Vector3.down)로 레이캐스트 발사
+                    Ray ray = new Ray(new Vector3(point.x, cameraPos.y, point.z), Vector3.down);
+
+                    if (Physics.Raycast(ray, out RaycastHit hit, 10.0f))
+                    {
+                        // 3. 평면에 닿았다면 해당 점의 Y값을 평면 높이로 갱신
+                        point.y = hit.point.y + 0.05f; // 바닥에 파묻히지 않게 살짝 띄움
+                        densePath[i] = point;
+                        _lineRenderer.SetPosition(i, point);
+                        startIndex = i + 1;
+                    }
+                }
+            }
+
+            yield return new WaitForSeconds(0.1f); // 0.1초마다 반복
         }
+    }
+
+    // 점과 점 사이를 촘촘하게 쪼개주는 함수
+    public List<Vector3> InterpolatePath(List<Vector3> originalPath, float maxDistance = 1.0f)
+    {
+        List<Vector3> densePath = new List<Vector3>();
+
+        // 첫 번째 점은 그대로 추가
+        densePath.Add(originalPath[0]);
+
+        for (int i = 0; i < originalPath.Count - 1; i++)
+        {
+            Vector3 p1 = originalPath[i];
+            Vector3 p2 = originalPath[i + 1];
+
+            // 두 점 사이의 실제 거리 측정
+            float distance = Vector3.Distance(p1, p2);
+
+            // 거리가 설정한 기준(예: 1m)보다 멀다면? 쪼갭니다!
+            if (distance > maxDistance)
+            {
+                // 몇 조각으로 나눌지 계산 (예: 5.5m면 6조각)
+                int segments = Mathf.CeilToInt(distance / maxDistance);
+
+                for (int j = 1; j <= segments; j++)
+                {
+                    // Lerp를 이용해 p1과 p2 사이의 비율(t)에 해당하는 중간 좌표를 구함
+                    float t = (float)j / segments;
+                    Vector3 midPoint = Vector3.Lerp(p1, p2, t);
+                    densePath.Add(midPoint);
+                }
+            }
+            else
+            {
+                // 거리가 짧으면 그냥 다음 점 추가
+                densePath.Add(p2);
+            }
+        }
+
+        // 촘촘해진 새로운 경로 리스트 반환
+        return densePath;
     }
 }
