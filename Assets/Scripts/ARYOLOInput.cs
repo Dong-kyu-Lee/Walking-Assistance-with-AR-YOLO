@@ -20,13 +20,27 @@ public class ARYOLOInput : MonoBehaviour
     private Texture2D cameraTexture;
     private bool isProcessing = false; // 현재 추론 및 대기 중인지 확인하는 플래그
 
-    void OnEnable()
+    void OnDisable()
     {
-        // 카메라 프레임이 업데이트될 때마다 호출될 이벤트 연결
-        cameraManager.frameReceived += OnCameraFrameReceived;
+        cameraManager.frameReceived -= OnCameraFrameReceived;
     }
 
-    void OnDisable()
+    public bool ConnectModelInference()
+    {
+        // 카메라 프레임이 업데이트될 때마다 호출될 이벤트 연결
+        if (yoloProcessor.IsModelLoaded)
+        {
+            cameraManager.frameReceived += OnCameraFrameReceived;
+            return true;
+        }
+        else
+        {
+            Debug.LogError("YOLO 모델이 로드되지 않았습니다. 모델을 먼저 로드해주세요.");
+            return false;
+        }
+    }
+
+    public void DisconnectModelInference()
     {
         cameraManager.frameReceived -= OnCameraFrameReceived;
     }
