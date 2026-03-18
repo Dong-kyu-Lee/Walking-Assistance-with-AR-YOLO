@@ -8,10 +8,10 @@ public class PathFindingUI : MonoBehaviour
     [SerializeField] private TMapSearcher _tmapSearcher;
 
     [Header("활성화 여부를 보여주는 UI")]
-    [SerializeField] private GameObject _isGpsOn;
-    [SerializeField] private GameObject _isAlign;
-    [SerializeField] private GameObject _isGetRoute;
-    [SerializeField] private GameObject _isLineRendered;
+    [SerializeField] private GameObject _gpsErrorIndicator;
+    [SerializeField] private GameObject _alineErrorIndicator;
+    [SerializeField] private GameObject _routeErrorIndicator;
+    [SerializeField] private GameObject _lineRenderedErrorIndicator;
 
     #region Singleton
     private static PathFindingUI s_instance;
@@ -26,7 +26,7 @@ public class PathFindingUI : MonoBehaviour
     {
         if (s_instance != null)
         {
-            Destroy(this);
+            Destroy(gameObject);
             return;
         }
 
@@ -46,15 +46,15 @@ public class PathFindingUI : MonoBehaviour
 
     private void Start()
     {
-        _isGpsOn.SetActive(true);
-        _isAlign.SetActive(true);
+        _gpsErrorIndicator.SetActive(true);
+        _alineErrorIndicator.SetActive(true);
         ResetDebug();
     }
 
     private void ResetDebug()
     {
-        _isGetRoute.SetActive(true);
-        _isLineRendered.SetActive(true);
+        _routeErrorIndicator.SetActive(true);
+        _lineRenderedErrorIndicator.SetActive(true);
     }
 
     public void SetDescription(string description)
@@ -74,8 +74,8 @@ public class PathFindingUI : MonoBehaviour
         _tmapSearcher.SearchPath(_inputField.text);
     }
 
-    public void ShowIsGPSOn(bool isSuccess) => _isGpsOn.SetActive(!isSuccess);
-    public void ShowIsAlign(bool isSuccess) => _isAlign.SetActive(!isSuccess);
-    public void ShowIsGetRoute(bool isSuccess) => _isGetRoute.SetActive(!isSuccess);
-    public void ShowIsLineRendered(bool isSuccess) => _isLineRendered.SetActive(!isSuccess);
+    public void ShowGPSErrorIndicator(bool isError) => _gpsErrorIndicator.SetActive(isError);
+    public void ShowAlignErrorIndicator(bool isError) => _alineErrorIndicator.SetActive(isError);
+    public void ShowRouteErrorIndicator(bool isError) => _routeErrorIndicator.SetActive(isError);
+    public void ShowLineRenderedErrorIndicator(bool isError) => _lineRenderedErrorIndicator.SetActive(isError);
 }

@@ -25,7 +25,7 @@ public class GPSManager : MonoBehaviour
         if (!Input.location.isEnabledByUser)
         {
             Debug.Log("스마트폰 GPS가 꺼져 있습니다.");
-            PathFindingUI.instance.ShowIsGPSOn(false);
+            PathFindingUI.instance.ShowGPSErrorIndicator(true);
             yield break;
         }
 
@@ -43,14 +43,14 @@ public class GPSManager : MonoBehaviour
         if (maxWait < 1 || Input.location.status == LocationServiceStatus.Failed)
         {
             Debug.Log("GPS 초기화 실패");
-            PathFindingUI.instance.ShowIsGPSOn(false);
+            PathFindingUI.instance.ShowGPSErrorIndicator(true);
             yield break;
         }
 
         // 5. 수신 성공! 실시간 갱신 시작
         isGPSStarted = true;
         Debug.Log("GPS 수신 시작");
-        PathFindingUI.instance.ShowIsGPSOn(true);
+        PathFindingUI.instance.ShowGPSErrorIndicator(false);
     }
 
     void Update()

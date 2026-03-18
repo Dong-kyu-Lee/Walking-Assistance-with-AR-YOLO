@@ -21,7 +21,6 @@ public class Poi
 
 public class TMapSearcher : MonoBehaviour
 {
-    private string appKey = "5xK1qao2zf863mYnjOMRQ1JgUzjS0EXW8NTz4B9Z";
 
     [SerializeField] private GPSManager _gpsManager;
 
@@ -39,9 +38,13 @@ public class TMapSearcher : MonoBehaviour
     private float _startTime;
     private float _endTime;
 
+
+    [SerializeField] private TextReader _reader;
     [SerializeField] private TMapRouterDrawing _tMapRouterDrawing;
     private Vector3Converter _vector3Converter = new Vector3Converter();
     private Transform _mainCamera;
+
+    private string _apiKey;
 
     private void Start()
     {
@@ -50,7 +53,9 @@ public class TMapSearcher : MonoBehaviour
 
     public void SearchPath(string destText)
     {
-        StartCoroutine(SearchPlace(destText));
+        _apiKey = _reader.ApiKey;
+        if (_apiKey != null)
+            StartCoroutine(SearchPlace(destText));
     }
 
     IEnumerator SearchPlaceDebug(string startKeyword, bool isStart)
@@ -62,7 +67,7 @@ public class TMapSearcher : MonoBehaviour
         using (UnityWebRequest www = UnityWebRequest.Get(url))
         {
             // 2. 헤더에 AppKey 설정
-            www.SetRequestHeader("appKey", appKey);
+            www.SetRequestHeader("appKey", _apiKey);
             www.SetRequestHeader("Accept", "application/json");
 
             yield return www.SendWebRequest();
@@ -110,7 +115,7 @@ public class TMapSearcher : MonoBehaviour
         using (UnityWebRequest www = UnityWebRequest.Get(url))
         {
             // 2. 헤더에 AppKey 설정
-            www.SetRequestHeader("appKey", appKey);
+            www.SetRequestHeader("appKey", _apiKey);
             www.SetRequestHeader("Accept", "application/json");
 
             yield return www.SendWebRequest();
@@ -139,7 +144,7 @@ public class TMapSearcher : MonoBehaviour
             else
             {
                 Debug.LogError("검색 에러: " + www.error);
-                PathFindingUI.instance.ShowIsGetRoute(false);
+                PathFindingUI.instance.ShowRouteErrorIndicator(true);
             }
         }
     }
@@ -161,8 +166,8 @@ public class TMapSearcher : MonoBehaviour
         WWWForm form = new WWWForm();
         //form.AddField("startX", startCoordinate.latitude.ToString());
         //form.AddField("startY", startCoordinate.longitude.ToString());
-        form.AddField("startX", _gpsManager.currentLat.ToString());
-        form.AddField("startY", _gpsManager.currentLon.ToString());
+        form.AddField("startX", _gpsManager.currentLon.ToString());
+        form.AddField("startY", _gpsManager.currentLat.ToString());
         form.AddField("endX", endX);
         form.AddField("endY", endY);
         form.AddField("startName", "출발지");
@@ -173,7 +178,7 @@ public class TMapSearcher : MonoBehaviour
         // UnityWebRequest.Post 를 사용합니다!
         using (UnityWebRequest www = UnityWebRequest.Post(url, form))
         {
-            www.SetRequestHeader("appKey", appKey.Trim());
+            www.SetRequestHeader("appKey", _apiKey.Trim());
 
             yield return www.SendWebRequest();
 
@@ -182,11 +187,11 @@ public class TMapSearcher : MonoBehaviour
                 Debug.Log("경로 수신 성공!");
                 Debug.Log(www.downloadHandler.text);
 
-                PathFindingUI.instance.ShowIsGetRoute(true);
+                PathFindingUI.instance.ShowRouteErrorIndicator(false);
 
                 // 여기서 응답받은 JSON 텍스트(www.downloadHandler.text)를 파싱합니다.
 
-                if (double.TryParse(_gpsManager.currentLat.ToString(), out double startLon) && double.TryParse(_gpsManager.currentLon.ToString(), out double startLat))
+                if (double.TryParse(_gpsManager.currentLon.ToString(), out double startLon) && double.TryParse(_gpsManager.currentLat.ToString(), out double startLat))
                 {
                     _tMapRouterDrawing.ParseRouteData(www.downloadHandler.text, startLon, startLat);
                 }
@@ -196,7 +201,7 @@ public class TMapSearcher : MonoBehaviour
             {
                 Debug.LogError("경로 수신 에러: " + www.error);
                 Debug.LogError("상세 에러: " + www.downloadHandler.text);
-                PathFindingUI.instance.ShowIsGetRoute(false);
+                PathFindingUI.instance.ShowRouteErrorIndicator(true);
             }
         }
         _endTime = Time.unscaledTime;

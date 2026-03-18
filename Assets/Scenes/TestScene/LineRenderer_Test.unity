@@ -1424,9 +1424,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 2512387469002778309, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1212142564}
-    - targetCorrespondingSourceObject: {fileID: 2512387469002778309, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1212142571}
   m_SourcePrefab: {fileID: 100100000, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
 --- !u!114 &331264286 stripped
 MonoBehaviour:
@@ -5990,19 +5987,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &1212142571
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1212142557}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ada8395804395df48bd37c5752ee2481, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EditorCameraControl
-  sensitivity: 2
 --- !u!1 &1262986090
 GameObject:
   m_ObjectHideFlags: 0
@@ -7575,10 +7559,10 @@ MonoBehaviour:
   _inputField: {fileID: 1201254357}
   _descriptionText: {fileID: 1960453511}
   _tmapSearcher: {fileID: 1729390896}
-  _isGpsOn: {fileID: 433206753}
-  _isAlign: {fileID: 664292496}
-  _isGetRoute: {fileID: 433206753}
-  _isLineRendered: {fileID: 241834185}
+  _gpsErrorIndicator: {fileID: 1491411634}
+  _alineErrorIndicator: {fileID: 664292496}
+  _routeErrorIndicator: {fileID: 433206753}
+  _lineRenderedErrorIndicator: {fileID: 241834185}
 --- !u!1 &1520419809
 GameObject:
   m_ObjectHideFlags: 0
@@ -7971,9 +7955,9 @@ GameObject:
   - component: {fileID: 1729390898}
   - component: {fileID: 1729390897}
   - component: {fileID: 1729390896}
-  - component: {fileID: 1729390901}
   - component: {fileID: 1729390902}
   - component: {fileID: 1729390903}
+  - component: {fileID: 1729390904}
   m_Layer: 0
   m_Name: TMapAPI
   m_TagString: Untagged
@@ -7996,6 +7980,7 @@ MonoBehaviour:
   _gpsManager: {fileID: 1729390903}
   _originName: "\uCDA9\uB0A8\uB300\uD559\uAD50"
   _destName: "\uCDA9\uBD81\uB300\uD559\uAD50"
+  _reader: {fileID: 1729390904}
   _tMapRouterDrawing: {fileID: 1729390897}
 --- !u!114 &1729390897
 MonoBehaviour:
@@ -8026,18 +8011,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1729390901
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1729390895}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1ffdbbb970ee010489f4676a306897b3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CoordinateConverter
 --- !u!120 &1729390902
 LineRenderer:
   serializedVersion: 3
@@ -8160,9 +8133,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a94c453a9a01f1b4b8577c5a7e9875a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GPSManager
-  currentLat: 127.14789
-  currentLon: 36.8096
+  currentLat: 36.8096
+  currentLon: 127.1479
   isGPSStarted: 0
+--- !u!114 &1729390904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1729390895}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d1991e80ec5fef41ac56171117dfa7c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TextReader
+  ApiKey: 
 --- !u!1 &1756045394
 GameObject:
   m_ObjectHideFlags: 0

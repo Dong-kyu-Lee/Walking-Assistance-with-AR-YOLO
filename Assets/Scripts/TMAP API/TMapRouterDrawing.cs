@@ -30,6 +30,9 @@ public class TMapRouterDrawing : MonoBehaviour
     public List<Vector3> routePathPoints = new List<Vector3>();
 
     public List<Vector3> densePath = new List<Vector3>();
+    private Vector3 _cameraPos;
+
+    private WaitForSeconds _waitTime = new WaitForSeconds(0.1f);
 
     private void Start()
     {
@@ -37,11 +40,13 @@ public class TMapRouterDrawing : MonoBehaviour
         _lineRenderer.positionCount = 0;
         _lineRenderer.startWidth = 0.1f;
         _lineRenderer.endWidth = 0.1f;
+
+        _cameraPos = Camera.main.transform.position;
     }
 
     public void ParseRouteData(string jsonResponse, double startLon, double startLat)
     {
-        PathFindingUI.instance.ShowIsLineRendered(false);
+        PathFindingUI.instance.ShowLineRenderedErrorIndicator(true);
         // 1. JSON 텍스트를 C# 객체로 역직렬화
         RouteResponse response = JsonConvert.DeserializeObject<RouteResponse>(jsonResponse);
 
@@ -88,7 +93,7 @@ public class TMapRouterDrawing : MonoBehaviour
 
         StartCoroutine(SnapToPlaneRoutine());
 
-        PathFindingUI.instance.ShowIsLineRendered(true);
+        PathFindingUI.instance.ShowLineRenderedErrorIndicator(false);
     }
 
     IEnumerator SnapToPlaneRoutine()
@@ -96,7 +101,7 @@ public class TMapRouterDrawing : MonoBehaviour
         int startIndex = 0;
         while (true)
         {
-            Vector3 cameraPos = Camera.main.transform.position;
+            //Vector3 cameraPos = Camera.main.transform.position;
 
             // 쪼개진 전체 경로(densePath)를 돌면서 확인하되,
             for (int i = startIndex; i < densePath.Count; i++)
@@ -104,10 +109,10 @@ public class TMapRouterDrawing : MonoBehaviour
                 Vector3 point = densePath[i];
 
                 // 1. 카메라와 점 사이의 거리가 5m 이내일 때만 연산 수행!
-                if (Vector3.Distance(cameraPos, point) < 5.0f)
+                if (Vector3.Distance(_cameraPos, point) < 5.0f)
                 {
                     // 2. 해당 점 위치에서 아래(Vector3.down)로 레이캐스트 발사
-                    Ray ray = new Ray(new Vector3(point.x, cameraPos.y, point.z), Vector3.down);
+                    Ray ray = new Ray(new Vector3(point.x, _cameraPos.y, point.z), Vector3.down);
 
                     if (Physics.Raycast(ray, out RaycastHit hit, 10.0f))
                     {
@@ -120,7 +125,7 @@ public class TMapRouterDrawing : MonoBehaviour
                 }
             }
 
-            yield return new WaitForSeconds(0.1f); // 0.1초마다 반복
+            yield return _waitTime; // 0.1초마다 반복
         }
     }
 

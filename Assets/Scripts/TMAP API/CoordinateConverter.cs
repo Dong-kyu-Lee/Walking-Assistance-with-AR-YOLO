@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-public class CoordinateConverter : MonoBehaviour
+public class CoordinateConverter
 {
     // 지구의 반지름 (미터)
     private const double EarthRadius = 6371000f;
