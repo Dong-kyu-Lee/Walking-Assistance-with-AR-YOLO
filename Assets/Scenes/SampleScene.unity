@@ -3538,6 +3538,7 @@ MonoBehaviour:
   - {fileID: 193383035}
   - {fileID: 105321057}
   - {fileID: 268871705}
+  debugText: {fileID: 0}
   model: {fileID: 0}
 --- !u!1 &920969223
 GameObject:
@@ -4166,6 +4167,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1033847246}
+  - component: {fileID: 1033847247}
   m_Layer: 5
   m_Name: InteractUI
   m_TagString: Untagged
@@ -4194,6 +4196,21 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1033847247
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1033847245}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 81e7d69f84ad1914c859db1e030f83ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InteractUI
+  leftButton: {fileID: 1933672233}
+  rightButton: {fileID: 1388071517}
+  interval: 0.5
 --- !u!1 &1059051467
 GameObject:
   m_ObjectHideFlags: 0
@@ -5875,7 +5892,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.3882353}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -7222,7 +7239,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.3882353}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

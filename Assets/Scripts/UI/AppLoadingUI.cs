@@ -6,6 +6,8 @@ public class AppLoadingUI : MonoBehaviour
 {
     [SerializeField]
     Graphic[] uiElements;
+    [SerializeField]
+    Text debugText;
 
     public ARYOLOInput model;
 
