@@ -105,3 +105,6 @@ InitTestScene*.unity*
 
 # APi Key Data
 config.json
+
+# Android Key Data
+user.keystore

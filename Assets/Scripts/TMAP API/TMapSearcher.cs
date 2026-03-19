@@ -185,6 +185,7 @@ public class TMapSearcher : MonoBehaviour
             if (www.result == UnityWebRequest.Result.Success)
             {
                 Debug.Log("경로 수신 성공!");
+                PathFindingUI.instance.ShowText("경로 수신 성공", IndicatorType.route);
                 Debug.Log(www.downloadHandler.text);
 
                 PathFindingUI.instance.ShowRouteErrorIndicator(false);
@@ -201,6 +202,7 @@ public class TMapSearcher : MonoBehaviour
             {
                 Debug.LogError("경로 수신 에러: " + www.error);
                 Debug.LogError("상세 에러: " + www.downloadHandler.text);
+                PathFindingUI.instance.ShowText("경로 수신 에러", IndicatorType.route);
                 PathFindingUI.instance.ShowRouteErrorIndicator(true);
             }
         }

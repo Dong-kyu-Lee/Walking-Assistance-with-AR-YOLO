@@ -1,17 +1,40 @@
 using TMPro;
 using UnityEngine;
 
+[System.Serializable]
+public struct ErrorDescriptions
+{
+    public GameObject ErrorIndicator;
+    public string ErrorText;
+}
+
+public enum IndicatorType
+{
+    gps,
+    aline,
+    route,
+    lineRenderer
+}
+
+
 public class PathFindingUI : MonoBehaviour
 {
     [SerializeField] private TMP_InputField _inputField;
     [SerializeField] private TextMeshProUGUI _descriptionText;
     [SerializeField] private TMapSearcher _tmapSearcher;
 
+
     [Header("활성화 여부를 보여주는 UI")]
     [SerializeField] private GameObject _gpsErrorIndicator;
     [SerializeField] private GameObject _alineErrorIndicator;
     [SerializeField] private GameObject _routeErrorIndicator;
     [SerializeField] private GameObject _lineRenderedErrorIndicator;
+
+    [Header("에러 메시지 출력 텍스트")]
+    [SerializeField] private TextMeshProUGUI _gpsErrorText;
+    [SerializeField] private TextMeshProUGUI _alineErrorText;
+    [SerializeField] private TextMeshProUGUI _routeErrorText;
+    [SerializeField] private TextMeshProUGUI _lineRenderErrorText;
 
     #region Singleton
     private static PathFindingUI s_instance;
@@ -74,8 +97,48 @@ public class PathFindingUI : MonoBehaviour
         _tmapSearcher.SearchPath(_inputField.text);
     }
 
-    public void ShowGPSErrorIndicator(bool isError) => _gpsErrorIndicator.SetActive(isError);
-    public void ShowAlignErrorIndicator(bool isError) => _alineErrorIndicator.SetActive(isError);
-    public void ShowRouteErrorIndicator(bool isError) => _routeErrorIndicator.SetActive(isError);
-    public void ShowLineRenderedErrorIndicator(bool isError) => _lineRenderedErrorIndicator.SetActive(isError);
+    public void ShowText(string text, IndicatorType type)
+    {
+        switch (type)
+        {
+            case IndicatorType.gps:
+                _gpsErrorText.text = text;
+                break;
+            case IndicatorType.aline:
+                _alineErrorText.text = text;
+                break;
+            case IndicatorType.route:
+                _routeErrorText.text = text;
+                break;
+            case IndicatorType.lineRenderer:
+                _lineRenderErrorText.text = text;
+                break;
+            default:
+                break;
+        }
+
+            
+
+        _descriptionText.text = text;
+    }
+
+    public void ShowGPSErrorIndicator(bool isError)
+    {
+            _gpsErrorIndicator.SetActive(isError);
+    }
+    public void ShowAlignErrorIndicator(bool isError)
+    {
+            _alineErrorIndicator.SetActive(isError);
+    }
+
+    public void ShowRouteErrorIndicator(bool isError)
+    {
+            _routeErrorIndicator.SetActive(isError);
+    }
+
+    public void ShowLineRenderedErrorIndicator(bool isError)
+    {
+            _lineRenderedErrorIndicator.SetActive(isError);
+    }
+
 }

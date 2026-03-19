@@ -73,6 +73,7 @@ public class TMapRouterDrawing : MonoBehaviour
         }
 
         Debug.Log($"총 {routePathPoints.Count}개의 Vector3 경로 포인트가 추출되었습니다.");
+        PathFindingUI.instance.ShowText("경로 추출 성공", IndicatorType.lineRenderer);
         /*foreach(Vector3 point in routePathPoints.Take<Vector3>(10))
         {
             Debug.Log(point);
@@ -90,8 +91,9 @@ public class TMapRouterDrawing : MonoBehaviour
         densePath = InterpolatePath(routePathPoints);
         _lineRenderer.positionCount = densePath.Count;
         _lineRenderer.SetPositions(densePath.ToArray());
+        PathFindingUI.instance.ShowText("경로 출력 성공", IndicatorType.lineRenderer);
 
-        StartCoroutine(SnapToPlaneRoutine());
+        //StartCoroutine(SnapToPlaneRoutine());
 
         PathFindingUI.instance.ShowLineRenderedErrorIndicator(false);
     }
