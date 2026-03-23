@@ -21,6 +21,9 @@ public class GPSManager : MonoBehaviour
 
     IEnumerator StartLocationService()
     {
+
+        yield return new WaitForSeconds(2f);
+
         // 2. 위치 서비스 장치가 켜져 있는지 확인
         if (!Input.location.isEnabledByUser)
         {
@@ -63,6 +66,8 @@ public class GPSManager : MonoBehaviour
             // 실시간으로 변수에 현재 좌표 업데이트
             currentLat = Input.location.lastData.latitude;
             currentLon = Input.location.lastData.longitude;
+
+            PathFindingUI.instance.PrintCurrentCoordinate(currentLat, currentLon);
         }
     }
 }

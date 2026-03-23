@@ -35,6 +35,7 @@ public class PathFindingUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _alineErrorText;
     [SerializeField] private TextMeshProUGUI _routeErrorText;
     [SerializeField] private TextMeshProUGUI _lineRenderErrorText;
+    [SerializeField] private TextMeshProUGUI _coordinateText;
 
     #region Singleton
     private static PathFindingUI s_instance;
@@ -72,12 +73,18 @@ public class PathFindingUI : MonoBehaviour
         _gpsErrorIndicator.SetActive(true);
         _alineErrorIndicator.SetActive(true);
         ResetDebug();
+
     }
 
     private void ResetDebug()
     {
         _routeErrorIndicator.SetActive(true);
         _lineRenderedErrorIndicator.SetActive(true);
+    }
+
+    public void PrintCurrentCoordinate(double startlat, double startlon)
+    {
+        _coordinateText.text = $"현재 좌표 : 위도 {startlat}, 경도 {startlon}";
     }
 
     public void SetDescription(string description)
