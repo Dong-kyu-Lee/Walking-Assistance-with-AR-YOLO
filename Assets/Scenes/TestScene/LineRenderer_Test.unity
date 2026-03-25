@@ -1357,6 +1357,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2512387469002778331, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
+      propertyPath: far clip plane
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 2512387469002778331, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
+      propertyPath: near clip plane
+      value: 0.01
+      objectReference: {fileID: 0}
     - target: {fileID: 2512387470319625105, guid: 48cb3fb68c91eb94999fd99957eb0cae, type: 3}
       propertyPath: m_OccludeARHitsWith2DObjects
       value: 1
@@ -8712,8 +8720,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a94c453a9a01f1b4b8577c5a7e9875a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GPSManager
-  currentLat: 36.76662
-  currentLon: 127.2812
+  currentLat: 36.7649
+  currentLon: 127.2866
   isGPSStarted: 0
   _arHeadingAlign: {fileID: 1082205485}
 --- !u!114 &1729390904

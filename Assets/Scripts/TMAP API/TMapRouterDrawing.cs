@@ -40,8 +40,8 @@ public class TMapRouterDrawing : MonoBehaviour
     {
         _lineRenderer = GetComponent<LineRenderer>();
         _lineRenderer.positionCount = 0;
-        _lineRenderer.startWidth = 0.5f;
-        _lineRenderer.endWidth = 0.5f;
+        _lineRenderer.startWidth = 1f;
+        _lineRenderer.endWidth = 1f;
 
         _cameraPos = Camera.main.transform.position;
     }
@@ -128,15 +128,17 @@ public class TMapRouterDrawing : MonoBehaviour
                     // 2. 해당 점 위치에서 아래(Vector3.down)로 레이캐스트 발사
                     Ray ray = new Ray(new Vector3(point.x, _cameraPos.y, point.z), Vector3.down);
 
-                    if (Physics.Raycast(ray, out RaycastHit hit, 10.0f))
+                    point.y = _cameraPos.y - 1.0f;
+
+                    /*if (Physics.Raycast(ray, out RaycastHit hit, 10.0f))
                     {
                         // 3. 평면에 닿았다면 해당 점의 Y값을 평면 높이로 갱신
-                        point.y = hit.point.y + 1f; // 바닥에 파묻히지 않게 살짝 띄움
+                        point.y = hit.point.y + 0.5f; // 바닥에 파묻히지 않게 살짝 띄움
                     }
                     else
                     {
-                        point.y = _cameraPos.y + .01f;
-                    }
+                        point.y = _cameraPos.y - 1.0f;
+                    }*/
                     densePath[i] = point;
                     _lineRenderer.SetPosition(i, point);
                     startIndex = i + 1;
