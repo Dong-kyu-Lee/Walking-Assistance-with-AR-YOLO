@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -38,8 +40,8 @@ public class TMapRouterDrawing : MonoBehaviour
     {
         _lineRenderer = GetComponent<LineRenderer>();
         _lineRenderer.positionCount = 0;
-        _lineRenderer.startWidth = 0.1f;
-        _lineRenderer.endWidth = 0.1f;
+        _lineRenderer.startWidth = 0.5f;
+        _lineRenderer.endWidth = 0.5f;
 
         _cameraPos = Camera.main.transform.position;
     }
@@ -68,6 +70,15 @@ public class TMapRouterDrawing : MonoBehaviour
 
                     Vector3 worldPos = converter.ConvertGpsToVector3(lon, lat);
                     routePathPoints.Add(worldPos);
+
+                    Vector3 displayPoint = new Vector3(worldPos.x, worldPos.y + 1.5f, worldPos.z);
+
+                    // 2. [디버그용] 해당 위치에 3m짜리 거대한 기둥 세우기
+                    GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    pillar.transform.position = displayPoint;
+                    pillar.transform.localScale = new Vector3(0.5f, 3.0f, 0.5f); // 얇고 길게 (높이 6m)
+                    pillar.GetComponent<Renderer>().material.color = new UnityEngine.Color(1, 0, 0, 0.5f);
+
                 }
             }
         }
@@ -87,13 +98,14 @@ public class TMapRouterDrawing : MonoBehaviour
             _lineRenderer.SetPosition(_lineRenderer.positionCount - 1, point);
         }*/
 
+
         densePath.Clear();
         densePath = InterpolatePath(routePathPoints);
         _lineRenderer.positionCount = densePath.Count;
         _lineRenderer.SetPositions(densePath.ToArray());
         PathFindingUI.instance.ShowText("경로 출력 성공", IndicatorType.lineRenderer);
 
-        //StartCoroutine(SnapToPlaneRoutine());
+        StartCoroutine(SnapToPlaneRoutine());
 
         PathFindingUI.instance.ShowLineRenderedErrorIndicator(false);
     }
@@ -119,11 +131,16 @@ public class TMapRouterDrawing : MonoBehaviour
                     if (Physics.Raycast(ray, out RaycastHit hit, 10.0f))
                     {
                         // 3. 평면에 닿았다면 해당 점의 Y값을 평면 높이로 갱신
-                        point.y = hit.point.y + 0.05f; // 바닥에 파묻히지 않게 살짝 띄움
-                        densePath[i] = point;
-                        _lineRenderer.SetPosition(i, point);
-                        startIndex = i + 1;
+                        point.y = hit.point.y + 1f; // 바닥에 파묻히지 않게 살짝 띄움
                     }
+                    else
+                    {
+                        point.y = _cameraPos.y + .01f;
+                    }
+                    densePath[i] = point;
+                    _lineRenderer.SetPosition(i, point);
+                    startIndex = i + 1;
+
                 }
             }
 
@@ -136,10 +153,13 @@ public class TMapRouterDrawing : MonoBehaviour
     {
         List<Vector3> densePath = new List<Vector3>();
 
+        // 현재 좌표를 시작 지점으로 설정
+        densePath.Add(Vector3.zero);
+
         // 첫 번째 점은 그대로 추가
         densePath.Add(originalPath[0]);
 
-        for (int i = 0; i < originalPath.Count - 1; i++)
+        for (int i = 1; i < originalPath.Count - 1; i++)
         {
             Vector3 p1 = originalPath[i];
             Vector3 p2 = originalPath[i + 1];

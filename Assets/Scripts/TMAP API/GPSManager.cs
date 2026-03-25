@@ -8,6 +8,8 @@ public class GPSManager : MonoBehaviour
     public float currentLon; // 현재 경도
     public bool isGPSStarted = false;
 
+    public ARHeadingAlign _arHeadingAlign;
+
     void Start()
     {
         // 1. 위치 권한 확인 (안드로이드 기준)
@@ -57,6 +59,8 @@ public class GPSManager : MonoBehaviour
         Debug.Log("GPS 수신 시작");
         PathFindingUI.instance.ShowText("GPS 수신 시작", IndicatorType.gps);
         PathFindingUI.instance.ShowGPSErrorIndicator(false);
+
+        StartCoroutine(_arHeadingAlign.AlignHeadingRoutine());
     }
 
     void Update()

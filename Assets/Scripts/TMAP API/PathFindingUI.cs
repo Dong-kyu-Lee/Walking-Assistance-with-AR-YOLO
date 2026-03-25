@@ -36,6 +36,7 @@ public class PathFindingUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _routeErrorText;
     [SerializeField] private TextMeshProUGUI _lineRenderErrorText;
     [SerializeField] private TextMeshProUGUI _coordinateText;
+    [SerializeField] private TextMeshProUGUI _trueAngleText;
 
     #region Singleton
     private static PathFindingUI s_instance;
@@ -85,6 +86,11 @@ public class PathFindingUI : MonoBehaviour
     public void PrintCurrentCoordinate(double startlat, double startlon)
     {
         _coordinateText.text = $"현재 좌표 : 위도 {startlat}, 경도 {startlon}";
+    }
+
+    public void PrintInputTrueHeading(float angle, float cameraAngle)
+    {
+        _trueAngleText.text = $"북쪽으로부터 {angle}도, 현재 카메라 각도 {cameraAngle}도.";
     }
 
     public void SetDescription(string description)
