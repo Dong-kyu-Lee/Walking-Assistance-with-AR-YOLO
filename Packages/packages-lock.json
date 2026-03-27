@@ -1,5 +1,22 @@
 {
   "dependencies": {
+    "com.google.ar.core.arfoundation.extensions": {
+      "version": "https://github.com/google-ar/arcore-unity-extensions.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.xr.arfoundation": "4.1.5",
+        "com.unity.xr.arcore": "4.1.5",
+        "com.unity.xr.arkit": "4.1.5"
+      },
+      "hash": "206be49762e7ba6f4f885abe031b3250402c1f24"
+    },
+    "com.unity.2d.sprite": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
     "com.unity.ai.inference": {
       "version": "2.5.0",
       "depth": 0,

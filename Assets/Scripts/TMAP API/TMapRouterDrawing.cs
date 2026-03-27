@@ -1,11 +1,12 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
+using Google.XR.ARCoreExtensions;
+using UnityEngine.XR.ARFoundation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using UnityEngine.XR.ARSubsystems;
+using System;
 
 public class RouteResponse
 {
@@ -28,8 +29,13 @@ public class Geometry
 public class TMapRouterDrawing : MonoBehaviour
 {
     private LineRenderer _lineRenderer;
+    [SerializeField] private AREarthManager _earthManager;
+    [SerializeField] private ARAnchorManager _arAnchorManager;
 
-    public List<Vector3> routePathPoints = new List<Vector3>();
+
+
+    public List<Vector3> RoutePathPoints = new List<Vector3>();
+    public List<ARGeospatialAnchor> PathAnchors = new List<ARGeospatialAnchor>();
 
     public List<Vector3> densePath = new List<Vector3>();
     private Vector3 _cameraPos;
@@ -46,6 +52,93 @@ public class TMapRouterDrawing : MonoBehaviour
         _cameraPos = Camera.main.transform.position;
     }
 
+    private void Update()
+    {
+        if (_earthManager.EarthState != EarthState.Enabled ||_earthManager.EarthTrackingState != TrackingState.Tracking)
+        {
+            return;
+        }
+
+        if (PathAnchors.Count > 0)
+        {
+            UpdateAnchors();
+        }
+
+    }
+
+    private void UpdateAnchors()
+    {
+        for (int i = 0; i < PathAnchors.Count; i++)
+        {
+            _lineRenderer.SetPosition(i, PathAnchors[i].transform.position);
+
+            // 2. [디버그용] 해당 위치에 3m짜리 거대한 기둥 세우기
+            GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pillar.transform.position = PathAnchors[i].transform.position;
+            pillar.transform.localScale = new Vector3(1f, 3.0f, 1f); // 얇고 길게 (높이 6m)
+            pillar.GetComponent<Renderer>().material.color = new UnityEngine.Color(1, 0, 0, 0.5f);
+        }
+    }
+
+    public IEnumerator CreateAnchors(string jsonResponse, double startLon, double startLat)
+    {
+        PathFindingUI.instance.ShowText("구글 VPS 추적 중... 카메라로 주변 건물을 비춰주세요...", IndicatorType.lineRenderer);
+
+        float count = 0;
+
+        while (( _earthManager.EarthState != EarthState.Enabled ||_earthManager.EarthTrackingState != TrackingState.Tracking) 
+            && count >= 20)
+        {
+            // 한 프레임 쉬고 다시 검사 (유니티 메인 스레드 멈춤 방지)
+            count++;
+            yield return null;
+        }
+
+        if (count>= 20)
+        {
+            PathFindingUI.instance.ShowText("구글 VPS 트래킹에 실패했습니다... 일반 GPS 모드로 전환합니다.", IndicatorType.lineRenderer);
+
+            ParseRouteData(jsonResponse, startLon, startLat);
+
+            yield break;
+        }
+
+
+        PathFindingUI.instance.ShowText("구글 VPS 트래킹 성공", IndicatorType.lineRenderer);
+        PathFindingUI.instance.ShowLineRenderedErrorIndicator(true);
+
+        RouteResponse response = JsonConvert.DeserializeObject<RouteResponse>(jsonResponse);
+
+        PathAnchors.Clear();
+
+        GeospatialPose pose = _earthManager.CameraGeospatialPose;
+        double lineAltitude = pose.Altitude - 1f;
+
+
+        // 3. features 리스트를 돌면서 LineString만 추출
+        foreach (var feature in response.features)
+        {
+            if (feature.geometry.type == "LineString")
+            {
+                // LineString의 각 [경도, 위도] 좌표를 Vector3로 변환하여 리스트에 추가
+                foreach (JToken coord in feature.geometry.coordinates)
+                {
+                    double lon = (double)coord[0];
+                    double lat = (double)coord[1];
+
+                    ARGeospatialAnchor anchor = _arAnchorManager.AddAnchor(lat, lon, lineAltitude, Quaternion.identity);
+                    if (anchor != null)
+                    {
+                        PathAnchors.Add(anchor);
+                    }
+                }
+            }
+        }
+
+        _lineRenderer.positionCount = PathAnchors.Count;
+    }
+
+
     public void ParseRouteData(string jsonResponse, double startLon, double startLat)
     {
         PathFindingUI.instance.ShowLineRenderedErrorIndicator(true);
@@ -55,7 +148,7 @@ public class TMapRouterDrawing : MonoBehaviour
         // 2. 좌표 변환기 초기화 (출발지를 기준점 0,0,0으로 설정)
         CoordinateConverter converter = new CoordinateConverter(startLon, startLat);
 
-        routePathPoints.Clear();
+        RoutePathPoints.Clear();
 
         // 3. features 리스트를 돌면서 LineString만 추출
         foreach (var feature in response.features)
@@ -69,7 +162,7 @@ public class TMapRouterDrawing : MonoBehaviour
                     double lat = (double)coord[1];
 
                     Vector3 worldPos = converter.ConvertGpsToVector3(lon, lat);
-                    routePathPoints.Add(worldPos);
+                    RoutePathPoints.Add(worldPos);
 
                     Vector3 displayPoint = new Vector3(worldPos.x, worldPos.y + 1.5f, worldPos.z);
 
@@ -83,7 +176,7 @@ public class TMapRouterDrawing : MonoBehaviour
             }
         }
 
-        Debug.Log($"총 {routePathPoints.Count}개의 Vector3 경로 포인트가 추출되었습니다.");
+        Debug.Log($"총 {RoutePathPoints.Count}개의 Vector3 경로 포인트가 추출되었습니다.");
         PathFindingUI.instance.ShowText("경로 추출 성공", IndicatorType.lineRenderer);
         /*foreach(Vector3 point in routePathPoints.Take<Vector3>(10))
         {
@@ -100,7 +193,7 @@ public class TMapRouterDrawing : MonoBehaviour
 
 
         densePath.Clear();
-        densePath = InterpolatePath(routePathPoints);
+        densePath = InterpolatePath(RoutePathPoints);
         _lineRenderer.positionCount = densePath.Count;
         _lineRenderer.SetPositions(densePath.ToArray());
         PathFindingUI.instance.ShowText("경로 출력 성공", IndicatorType.lineRenderer);
