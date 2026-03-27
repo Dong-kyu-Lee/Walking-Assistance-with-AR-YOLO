@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class CameraXManager : MonoBehaviour
@@ -53,5 +54,10 @@ public class CameraXManager : MonoBehaviour
             }
         }
         else Debug.Log("Android ÇÃ·§ÆûÀÌ ¾Æ´Õ´Ï´Ù.");
+    }
+
+    public void MoveScene()
+    {
+        SceneManager.LoadScene("MainScene");
     }
 }

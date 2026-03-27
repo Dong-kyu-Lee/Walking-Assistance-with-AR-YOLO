@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class InteractUI : MonoBehaviour
@@ -76,18 +77,34 @@ public class InteractUI : MonoBehaviour
         }
     }
 
+    // AR 길찾기 씬으로 이동
     private void OnLeftButtonDoubleClicked()
     {
         Debug.Log("Left Button Double Clicked");
         debugText = "Left Button Double Clicked";
         // 좌측 버튼 더블 클릭 시 실행할 로직을 여기에 작성해주세요
+        if(SceneManager.GetActiveScene().name != "ARScene")
+        {
+            SceneManager.LoadScene("ARScene");
+        }
+        else {
+            Debug.Log("이미 ARScene에 있습니다.");
+        }
     }
 
+    // 시각 개선 씬으로 이동
     private void OnRightButtonDoubleClicked()
     {
         Debug.Log("Right Button Double Clicked");
         debugText = "Right Button Double Clicked";
         // 우측 버튼 더블 클릭 시 실행할 로직을 여기에 작성해주세요
+        if(SceneManager.GetActiveScene().name != "CameraXScene")
+        {
+            SceneManager.LoadScene("CameraXScene");
+        }
+        else {
+            Debug.Log("이미 CameraXScene에 있습니다.");
+        }
     }
 
     private void OnGUI()

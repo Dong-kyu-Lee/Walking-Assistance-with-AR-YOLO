@@ -91,6 +91,7 @@ public class RunYOLO : MonoBehaviour
         // 모델을 원본 그대로 로드하고 즉시 Worker에 할당합니다.
         var model = ModelLoader.Load(modelAsset);
         worker = new Worker(model, backend);
+        Debug.Log("모델 로드");
     }
 
     void OnDestroy()
