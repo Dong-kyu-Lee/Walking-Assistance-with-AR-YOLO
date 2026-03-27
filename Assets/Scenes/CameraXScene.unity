@@ -878,9 +878,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraXYOLOInput
   yoloProcessor: {fileID: 794914120}
-  inferenceInterval: 5
+  displayImage: {fileID: 1224465182}
+  inferenceIntervalSeconds: 0.2
   slider: {fileID: 1998226810}
-  cameraTexture: {fileID: 0}
 --- !u!114 &794914120
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -893,8 +893,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37c1c9b68112c3b4497008bb6660f6fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RunYOLO
-  modelAsset: {fileID: 5022602860645237092, guid: 75e3ca83aecdd11459f83632526e35f9, type: 3}
-  classesAsset: {fileID: 4900000, guid: be06d90b2fb6f2e438fd84afc7af9630, type: 3}
+  modelAsset: {fileID: 5022602860645237092, guid: 02c87eac6150dd8439e7ee47dc564968, type: 3}
+  classesAsset: {fileID: 4900000, guid: 01094ab2881176a4d9787bb4cadea3d1, type: 3}
   displayImage: {fileID: 1124447615}
   borderTexture: {fileID: 2800000, guid: c9d350aff2de5774db4aba2482e1dff1, type: 3}
   font: {fileID: 12800000, guid: 109207b3ec45446afb082067696d36e6, type: 3}
@@ -1455,7 +1455,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1494,7 +1494,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1224465181
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2010,8 +2010,8 @@ RectTransform:
   m_LocalScale: {x: 0, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1124447614}
   - {fileID: 1224465181}
+  - {fileID: 1124447614}
   - {fileID: 2057100483}
   - {fileID: 155010069}
   - {fileID: 1998226809}

@@ -107,7 +107,7 @@ public class RunYOLO : MonoBehaviour
         if (sourceTexture == null) yield break;
 
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-        if (!isARMode) displayImage.texture = targetRT;
+        // if (!isARMode) displayImage.texture = targetRT;
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
         worker.Schedule(inputTensor);

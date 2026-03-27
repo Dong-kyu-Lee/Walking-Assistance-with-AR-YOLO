@@ -7,15 +7,20 @@ public class CameraXYOLOInput : MonoBehaviour
     [Header("YOLO Reference")]
     public RunYOLO yoloProcessor; // 기존 RunYOLO.cs 연결
 
+    [Header("Display")]
+    public RawImage displayImage; // 카메라 프레임을 보여줄 UI 요소
+
     [Header("Optimization Settings")]
-    [Range(1, 60)]
-    public int inferenceInterval = 5;
-    
+    [Range(0.1f, 2.0f)]
+    [Tooltip("YOLO 추론 주기 (초 단위). 예: 0.2초 = 5FPS")]
+    public float inferenceIntervalSeconds = 0.2f;
+
     [SerializeField] private Slider slider;
     private AndroidJavaObject cameraController;
-    [SerializeField] private Texture2D cameraTexture;
+    private Texture2D cameraTexture;
     private float zoomValue = 0.0f; // 슬라이더에서 조정할 줌 값 (0.0 ~ 1.0)
     private bool isProcessing = false;
+    private float inferenceTimer = 0f;
 
     void Start()
     {
@@ -34,51 +39,65 @@ public class CameraXYOLOInput : MonoBehaviour
 
     void Update()
     {
-        // YOLO 모델이 로드되었고, 이전 추론이 끝났다면 다음 프레임 가져오기 시작
-        if (!isProcessing && yoloProcessor.IsModelLoaded && cameraController != null)
+        if (cameraController != null)
         {
-            StartCoroutine(FetchFrameAndRunInference());
+            // 1. 카메라는 매 프레임 가져와서 화면을 부드럽게 갱신합니다.
+            UpdateCameraFeed();
+
+            // 2. YOLO 추론은 타이머를 이용해 별도의 주기로 실행합니다.
+            if (yoloProcessor.IsModelLoaded && cameraTexture != null)
+            {
+                inferenceTimer += Time.deltaTime;
+                if (inferenceTimer >= inferenceIntervalSeconds && !isProcessing)
+                {
+                    inferenceTimer = 0f;
+                    StartCoroutine(RunInference());
+                }
+            }
         }
     }
 
-    private IEnumerator FetchFrameAndRunInference()
+    private void UpdateCameraFeed()
     {
-        isProcessing = true;
-        Debug.Log("카메라 프레임 처리 시작");
-
-        // 1. 네이티브 플러그인에서 현재 카메라 해상도 가져오기
         int width = cameraController.Call<int>("getFrameWidth");
         int height = cameraController.Call<int>("getFrameHeight");
 
         if (width > 0 && height > 0)
         {
-            // 2. 픽셀 데이터(RGBA)를 byte 배열로 가져오기
             byte[] frameData = cameraController.Call<byte[]>("getLatestFrameData");
 
             if (frameData != null && frameData.Length > 0)
             {
-                // 3. 텍스처 초기화 (해상도가 바뀌거나 처음 생성할 때)
                 if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
                 {
-                    // CameraX의 RGBA_8888 포맷과 유니티의 RGBA32는 완벽하게 호환됩니다.
                     cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 }
 
-                // 4. 데이터를 텍스처에 덮어씌우고 GPU로 전송
                 cameraTexture.LoadRawTextureData(frameData);
                 cameraTexture.Apply();
 
-                // 5. RunYOLO.cs로 텍스처를 넘겨서 추론 실행 및 화면 출력
-                yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
+                // 원본 텍스처를 화면에 즉시 렌더링
+                if (displayImage != null)
+                {
+                    displayImage.texture = cameraTexture;
+
+                    displayImage.uvRect = new Rect(0, 1, 1, -1);
+
+                    // (선택) AspectRatioFitter를 통해 비율이 자동으로 맞춰지게 설정
+                    AspectRatioFitter fitter = displayImage.GetComponent<AspectRatioFitter>();
+                    if (fitter != null)
+                    {
+                        fitter.aspectRatio = (float)width / height;
+                    }
+                }
             }
         }
+    }
 
-        // 6. 지정된 프레임 간격만큼 대기 (부하 조절)
-        for (int i = 0; i < inferenceInterval; i++)
-        {
-            yield return null;
-        }
-
+    private IEnumerator RunInference()
+    {
+        isProcessing = true;
+        yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
         isProcessing = false;
     }
 
