@@ -91,6 +91,7 @@ public class RunYOLO : MonoBehaviour
         // 모델을 원본 그대로 로드하고 즉시 Worker에 할당합니다.
         var model = ModelLoader.Load(modelAsset);
         worker = new Worker(model, backend);
+        Debug.Log("모델 로드");
     }
 
     void OnDestroy()
@@ -106,7 +107,7 @@ public class RunYOLO : MonoBehaviour
         if (sourceTexture == null) yield break;
 
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-        if (!isARMode) displayImage.texture = targetRT;
+        // if (!isARMode) displayImage.texture = targetRT;
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
         worker.Schedule(inputTensor);
