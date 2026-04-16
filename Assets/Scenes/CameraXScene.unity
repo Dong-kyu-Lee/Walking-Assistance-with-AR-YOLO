@@ -879,8 +879,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraXYOLOInput
   yoloProcessor: {fileID: 794914120}
   displayImage: {fileID: 1224465182}
-  inferenceIntervalSeconds: 0.2
   slider: {fileID: 1998226810}
+  inferenceIntervalSeconds: 0.2
 --- !u!114 &794914120
 MonoBehaviour:
   m_ObjectHideFlags: 0

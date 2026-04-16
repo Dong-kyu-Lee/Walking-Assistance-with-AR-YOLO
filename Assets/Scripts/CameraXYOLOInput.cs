@@ -1,101 +1,312 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Android;
 
 public class CameraXYOLOInput : MonoBehaviour
 {
     [Header("YOLO Reference")]
-    public RunYOLO yoloProcessor; // 기존 RunYOLO.cs 연결
+    [SerializeField] private RunYOLO yoloProcessor;
 
     [Header("Display")]
-    public RawImage displayImage; // 카메라 프레임을 보여줄 UI 요소
+    [SerializeField] private RawImage displayImage;
+
+    [Header("UI")]
+    [SerializeField] private Slider slider;
 
     [Header("Optimization Settings")]
     [Range(0.1f, 2.0f)]
     [Tooltip("YOLO 추론 주기 (초 단위). 예: 0.2초 = 5FPS")]
-    public float inferenceIntervalSeconds = 0.2f;
+    [SerializeField] private float inferenceIntervalSeconds = 0.2f;
 
-    [SerializeField] private Slider slider;
     private AndroidJavaObject cameraController;
     private Texture2D cameraTexture;
-    private float zoomValue = 0.0f; // 슬라이더에서 조정할 줌 값 (0.0 ~ 1.0)
+    private AspectRatioFitter aspectRatioFitter;
+
+    private float zoomValue = 0.0f;
     private bool isProcessing = false;
     private float inferenceTimer = 0f;
 
-    void Start()
+    private bool permissionResolved = false;
+    private bool cameraPermissionGranted = false;
+    private bool isCameraStarted = false;
+    private bool isInitializing = false;
+
+    private const string PluginClassName = "com.example.unitycamerax.CameraXController";
+
+    private IEnumerator Start()
     {
-        if (Application.platform == RuntimePlatform.Android)
+        if (displayImage != null)
+            aspectRatioFitter = displayImage.GetComponent<AspectRatioFitter>();
+
+        yield return StartCoroutine(InitializeRoutine());
+    }
+
+    private IEnumerator InitializeRoutine()
+    {
+        if (isInitializing)
+            yield break;
+
+        isInitializing = true;
+
+        if (Application.platform != RuntimePlatform.Android)
         {
-            // 플러그인 연결 및 카메라 켜기
-            AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-            AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-            
-            string pluginName = "com.example.unitycamerax.CameraXController";
-            cameraController = new AndroidJavaObject(pluginName, currentActivity);
-            cameraController.Call("startCamera");
-            Debug.Log("CameraX 초기화 명령 전송 완료");
+            Debug.LogWarning("[CameraXYOLOInput] Android 전용 코드입니다.");
+            isInitializing = false;
+            yield break;
+        }
+
+        yield return StartCoroutine(RequestCameraPermissionRoutine());
+
+        if (!cameraPermissionGranted)
+        {
+            Debug.LogError("[CameraXYOLOInput] 카메라 권한이 없어 초기화를 중단합니다.");
+            isInitializing = false;
+            yield break;
+        }
+
+        // 권한 승인 직후 / 씬 진입 직후 CameraX 초기화 안정화용
+        yield return null;
+        yield return new WaitForSeconds(0.2f);
+
+        InitializeCameraController();
+        StartCamera();
+
+        isInitializing = false;
+    }
+
+    private IEnumerator RequestCameraPermissionRoutine()
+    {
+        if (Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            cameraPermissionGranted = true;
+            permissionResolved = true;
+            yield break;
+        }
+
+        permissionResolved = false;
+        cameraPermissionGranted = false;
+
+        PermissionCallbacks callbacks = new PermissionCallbacks();
+
+        callbacks.PermissionGranted += permission =>
+        {
+            if (permission == Permission.Camera)
+            {
+                cameraPermissionGranted = true;
+                permissionResolved = true;
+                Debug.Log("[CameraXYOLOInput] 카메라 권한 승인됨");
+            }
+        };
+
+        callbacks.PermissionDenied += permission =>
+        {
+            if (permission == Permission.Camera)
+            {
+                cameraPermissionGranted = false;
+                permissionResolved = true;
+                Debug.LogWarning("[CameraXYOLOInput] 카메라 권한 거부됨");
+            }
+        };
+
+        callbacks.PermissionDeniedAndDontAskAgain += permission =>
+        {
+            if (permission == Permission.Camera)
+            {
+                cameraPermissionGranted = false;
+                permissionResolved = true;
+                Debug.LogWarning("[CameraXYOLOInput] 카메라 권한 거부됨 (다시 묻지 않음)");
+            }
+        };
+
+        Permission.RequestUserPermission(Permission.Camera, callbacks);
+
+        float timeout = 10f;
+        float timer = 0f;
+
+        while (!permissionResolved && timer < timeout)
+        {
+            timer += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (!permissionResolved)
+        {
+            cameraPermissionGranted = Permission.HasUserAuthorizedPermission(Permission.Camera);
+            permissionResolved = true;
+            Debug.LogWarning("[CameraXYOLOInput] 권한 응답 대기 시간이 초과되어 현재 권한 상태를 다시 확인했습니다.");
         }
     }
 
-    void Update()
+    private void InitializeCameraController()
     {
         if (cameraController != null)
-        {
-            // 1. 카메라는 매 프레임 가져와서 화면을 부드럽게 갱신합니다.
-            UpdateCameraFeed();
+            return;
 
-            // 2. YOLO 추론은 타이머를 이용해 별도의 주기로 실행합니다.
-            if (yoloProcessor.IsModelLoaded && cameraTexture != null)
+        try
+        {
+            AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+            AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+
+            cameraController = new AndroidJavaObject(PluginClassName, currentActivity);
+
+            if (cameraController == null)
             {
-                inferenceTimer += Time.deltaTime;
-                if (inferenceTimer >= inferenceIntervalSeconds && !isProcessing)
-                {
-                    inferenceTimer = 0f;
-                    StartCoroutine(RunInference());
-                }
+                Debug.LogError("[CameraXYOLOInput] CameraXController 생성 실패");
+                return;
+            }
+
+            Debug.Log("[CameraXYOLOInput] CameraXController 생성 완료");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] CameraXController 초기화 실패: {e}");
+        }
+    }
+
+    private void StartCamera()
+    {
+        if (cameraController == null)
+        {
+            Debug.LogError("[CameraXYOLOInput] cameraController가 null이라 startCamera 호출 불가");
+            return;
+        }
+
+        if (isCameraStarted)
+            return;
+
+        try
+        {
+            cameraController.Call("startCamera");
+            isCameraStarted = true;
+            Debug.Log("[CameraXYOLOInput] startCamera 호출 완료");
+        }
+        catch (System.Exception e)
+        {
+            isCameraStarted = false;
+            Debug.LogError($"[CameraXYOLOInput] startCamera 호출 실패: {e}");
+        }
+    }
+
+    private void StopCamera()
+    {
+        if (cameraController == null)
+            return;
+
+        if (!isCameraStarted)
+            return;
+
+        try
+        {
+            cameraController.Call("stopCamera");
+            isCameraStarted = false;
+            Debug.Log("[CameraXYOLOInput] stopCamera 호출 완료");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] stopCamera 호출 실패: {e}");
+        }
+    }
+
+    private void Update()
+    {
+        if (Application.platform != RuntimePlatform.Android)
+            return;
+
+        if (!cameraPermissionGranted)
+            return;
+
+        if (cameraController == null || !isCameraStarted)
+            return;
+
+        UpdateCameraFeed();
+
+        if (yoloProcessor != null &&
+            yoloProcessor.IsModelLoaded &&
+            cameraTexture != null &&
+            !isProcessing)
+        {
+            inferenceTimer += Time.deltaTime;
+
+            if (inferenceTimer >= inferenceIntervalSeconds)
+            {
+                inferenceTimer = 0f;
+                StartCoroutine(RunInference());
             }
         }
     }
 
     private void UpdateCameraFeed()
     {
-        int width = cameraController.Call<int>("getFrameWidth");
-        int height = cameraController.Call<int>("getFrameHeight");
+        int width = 0;
+        int height = 0;
 
-        if (width > 0 && height > 0)
+        try
         {
-            byte[] frameData = cameraController.Call<byte[]>("getLatestFrameData");
+            width = cameraController.Call<int>("getFrameWidth");
+            height = cameraController.Call<int>("getFrameHeight");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] 프레임 크기 조회 실패: {e}");
+            return;
+        }
 
-            if (frameData != null && frameData.Length > 0)
-            {
-                if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
-                {
-                    cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-                }
+        if (width <= 0 || height <= 0)
+            return;
 
-                cameraTexture.LoadRawTextureData(frameData);
-                cameraTexture.Apply();
+        byte[] frameData = null;
 
-                // 원본 텍스처를 화면에 즉시 렌더링
-                if (displayImage != null)
-                {
-                    displayImage.texture = cameraTexture;
+        try
+        {
+            frameData = cameraController.Call<byte[]>("getLatestFrameData");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] 프레임 데이터 조회 실패: {e}");
+            return;
+        }
 
-                    displayImage.uvRect = new Rect(0, 1, 1, -1);
+        if (frameData == null || frameData.Length == 0)
+            return;
 
-                    // (선택) AspectRatioFitter를 통해 비율이 자동으로 맞춰지게 설정
-                    AspectRatioFitter fitter = displayImage.GetComponent<AspectRatioFitter>();
-                    if (fitter != null)
-                    {
-                        fitter.aspectRatio = (float)width / height;
-                    }
-                }
-            }
+        int expectedLength = width * height * 4; // RGBA32 기준
+        if (frameData.Length < expectedLength)
+        {
+            Debug.LogWarning($"[CameraXYOLOInput] 프레임 데이터 길이가 예상보다 짧습니다. length={frameData.Length}, expected={expectedLength}");
+            return;
+        }
+
+        if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
+        {
+            if (cameraTexture != null)
+                Destroy(cameraTexture);
+
+            cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            cameraTexture.wrapMode = TextureWrapMode.Clamp;
+            cameraTexture.filterMode = FilterMode.Bilinear;
+        }
+
+        cameraTexture.LoadRawTextureData(frameData);
+        cameraTexture.Apply(false);
+
+        if (displayImage != null)
+        {
+            displayImage.texture = cameraTexture;
+
+            // Android 카메라 프레임 상하 반전 보정
+            displayImage.uvRect = new Rect(0, 1, 1, -1);
+
+            if (aspectRatioFitter != null)
+                aspectRatioFitter.aspectRatio = (float)width / height;
         }
     }
 
     private IEnumerator RunInference()
     {
+        if (yoloProcessor == null || cameraTexture == null)
+            yield break;
+
         isProcessing = true;
         yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
         isProcessing = false;
@@ -103,38 +314,110 @@ public class CameraXYOLOInput : MonoBehaviour
 
     public void SetLinearZoom()
     {
-        zoomValue = slider.value; // 슬라이더에서 현재 값 가져오기
-        if (Application.platform == RuntimePlatform.Android)
+        if (slider == null)
         {
-            if (cameraController != null)
-            {
-                cameraController.Call("setLinearZoom", zoomValue);
-                Debug.Log($"Linear Zoom 값 전송: {zoomValue}");
-            }
+            Debug.LogWarning("[CameraXYOLOInput] Slider가 연결되지 않았습니다.");
+            return;
         }
-        else Debug.Log("Android 플랫폼이 아닙니다.");
+
+        zoomValue = slider.value;
+
+        if (Application.platform != RuntimePlatform.Android)
+        {
+            Debug.Log("[CameraXYOLOInput] Android 플랫폼이 아닙니다.");
+            return;
+        }
+
+        if (cameraController == null)
+        {
+            Debug.LogWarning("[CameraXYOLOInput] cameraController가 null입니다.");
+            return;
+        }
+
+        try
+        {
+            cameraController.Call("setLinearZoom", zoomValue);
+            Debug.Log($"[CameraXYOLOInput] Linear Zoom 값 전송: {zoomValue}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] setLinearZoom 실패: {e}");
+        }
     }
 
     public void SetZoomRatio(float ratio)
     {
-        if (Application.platform == RuntimePlatform.Android)
+        if (Application.platform != RuntimePlatform.Android)
         {
-            if (cameraController != null)
-            {
-                cameraController.Call("setZoomRatio", ratio);
-                Debug.Log($"Zoom Ratio 값 전송: {ratio}");
-            }
+            Debug.Log("[CameraXYOLOInput] Android 플랫폼이 아닙니다.");
+            return;
         }
-        else Debug.Log("Android 플랫폼이 아닙니다.");
+
+        if (cameraController == null)
+        {
+            Debug.LogWarning("[CameraXYOLOInput] cameraController가 null입니다.");
+            return;
+        }
+
+        try
+        {
+            cameraController.Call("setZoomRatio", ratio);
+            Debug.Log($"[CameraXYOLOInput] Zoom Ratio 값 전송: {ratio}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] setZoomRatio 실패: {e}");
+        }
     }
 
-    void OnDestroy()
+    private void OnApplicationPause(bool pause)
     {
-        // [매우 중요] 객체 탐지 씬이 종료될 때 반드시 카메라를 꺼주어야 AR 씬에서 카메라를 쓸 수 있습니다!
-        if (cameraController != null)
+        if (Application.platform != RuntimePlatform.Android)
+            return;
+
+        if (!cameraPermissionGranted)
+            return;
+
+        if (pause)
         {
-            cameraController.Call("stopCamera");
-            Debug.Log("CameraX 종료: 카메라 권한을 반환합니다.");
+            StopCamera();
         }
+        else
+        {
+            if (cameraController == null)
+                InitializeCameraController();
+
+            StartCamera();
+        }
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (Application.platform != RuntimePlatform.Android)
+            return;
+
+        if (!cameraPermissionGranted)
+            return;
+
+        if (hasFocus)
+        {
+            if (cameraController == null)
+                InitializeCameraController();
+
+            StartCamera();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        StopCamera();
+
+        if (cameraTexture != null)
+        {
+            Destroy(cameraTexture);
+            cameraTexture = null;
+        }
+
+        cameraController = null;
     }
 }
