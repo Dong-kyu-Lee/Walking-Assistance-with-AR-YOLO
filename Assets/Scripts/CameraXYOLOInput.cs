@@ -65,7 +65,6 @@ public class CameraXYOLOInput : MonoBehaviour
 
         if (width > 0 && height > 0)
         {
-            Debug.Log($"카메라 프레임 크기: {width}x{height}");
             byte[] frameData = cameraController.Call<byte[]>("getLatestFrameData");
 
             if (frameData != null && frameData.Length > 0)
@@ -85,7 +84,7 @@ public class CameraXYOLOInput : MonoBehaviour
 
                     displayImage.uvRect = new Rect(0, 1, 1, -1);
 
-                        if (aspectFitter == null)
+                    if (aspectFitter == null)
                     {
                         aspectFitter = displayImage.GetComponent<AspectRatioFitter>();
                         if (aspectFitter == null)
