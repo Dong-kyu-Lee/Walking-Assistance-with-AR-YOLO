@@ -5,20 +5,21 @@ using UnityEngine.UI;
 public class CameraXYOLOInput : MonoBehaviour
 {
     [Header("YOLO Reference")]
-    public RunYOLO yoloProcessor; // ±âÁ¸ RunYOLO.cs ¿¬°á
+    public RunYOLO yoloProcessor; // ê¸°ì¡´ RunYOLO.cs ì—°ê²°
 
     [Header("Display")]
-    public RawImage displayImage; // Ä«¸Ş¶ó ÇÁ·¹ÀÓÀ» º¸¿©ÁÙ UI ¿ä¼Ò
+    public RawImage displayImage; // ì¹´ë©”ë¼ í”„ë ˆì„ì„ ë³´ì—¬ì¤„ UI ìš”ì†Œ
 
     [Header("Optimization Settings")]
     [Range(0.1f, 2.0f)]
-    [Tooltip("YOLO Ãß·Ğ ÁÖ±â (ÃÊ ´ÜÀ§). ¿¹: 0.2ÃÊ = 5FPS")]
+    [Tooltip("YOLO ì¶”ë¡  ì£¼ê¸° (ì´ˆ ë‹¨ìœ„). ì˜ˆ: 0.2ì´ˆ = 5FPS")]
     public float inferenceIntervalSeconds = 0.2f;
 
     [SerializeField] private Slider slider;
     private AndroidJavaObject cameraController;
     private Texture2D cameraTexture;
-    private float zoomValue = 0.0f; // ½½¶óÀÌ´õ¿¡¼­ Á¶Á¤ÇÒ ÁÜ °ª (0.0 ~ 1.0)
+    private AspectRatioFitter aspectFitter;
+    private float zoomValue = 0.0f; // ìŠ¬ë¼ì´ë”ì—ì„œ ì¡°ì •í•  ì¤Œ ê°’ (0.0 ~ 1.0)
     private bool isProcessing = false;
     private float inferenceTimer = 0f;
 
@@ -26,14 +27,14 @@ public class CameraXYOLOInput : MonoBehaviour
     {
         if (Application.platform == RuntimePlatform.Android)
         {
-            // ÇÃ·¯±×ÀÎ ¿¬°á ¹× Ä«¸Ş¶ó ÄÑ±â
+            // í”ŒëŸ¬ê·¸ì¸ ì—°ê²° ë° ì¹´ë©”ë¼ ì¼œê¸°
             AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
             AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
             
             string pluginName = "com.example.unitycamerax.CameraXController";
             cameraController = new AndroidJavaObject(pluginName, currentActivity);
             cameraController.Call("startCamera");
-            Debug.Log("CameraX ÃÊ±âÈ­ ¸í·É Àü¼Û ¿Ï·á");
+            Debug.Log("CameraX ì´ˆê¸°í™” ëª…ë ¹ ì „ì†¡ ì™„ë£Œ");
         }
     }
 
@@ -41,10 +42,10 @@ public class CameraXYOLOInput : MonoBehaviour
     {
         if (cameraController != null)
         {
-            // 1. Ä«¸Ş¶ó´Â ¸Å ÇÁ·¹ÀÓ °¡Á®¿Í¼­ È­¸éÀ» ºÎµå·´°Ô °»½ÅÇÕ´Ï´Ù.
+            // 1. ì¹´ë©”ë¼ëŠ” ë§¤ í”„ë ˆì„ ê°€ì ¸ì™€ì„œ í™”ë©´ì„ ë¶€ë“œëŸ½ê²Œ ê°±ì‹ í•©ë‹ˆë‹¤.
             UpdateCameraFeed();
 
-            // 2. YOLO Ãß·ĞÀº Å¸ÀÌ¸Ó¸¦ ÀÌ¿ëÇØ º°µµÀÇ ÁÖ±â·Î ½ÇÇàÇÕ´Ï´Ù.
+            // 2. YOLO ì¶”ë¡ ì€ íƒ€ì´ë¨¸ë¥¼ ì´ìš©í•´ ë³„ë„ì˜ ì£¼ê¸°ë¡œ ì‹¤í–‰í•©ë‹ˆë‹¤.
             if (yoloProcessor.IsModelLoaded && cameraTexture != null)
             {
                 inferenceTimer += Time.deltaTime;
@@ -76,19 +77,23 @@ public class CameraXYOLOInput : MonoBehaviour
                 cameraTexture.LoadRawTextureData(frameData);
                 cameraTexture.Apply();
 
-                // ¿øº» ÅØ½ºÃ³¸¦ È­¸é¿¡ Áï½Ã ·»´õ¸µ
+                // ì›ë³¸ í…ìŠ¤ì²˜ë¥¼ í™”ë©´ì— ì¦‰ì‹œ ë Œë”ë§
                 if (displayImage != null)
                 {
                     displayImage.texture = cameraTexture;
 
                     displayImage.uvRect = new Rect(0, 1, 1, -1);
 
-                    // (¼±ÅÃ) AspectRatioFitter¸¦ ÅëÇØ ºñÀ²ÀÌ ÀÚµ¿À¸·Î ¸ÂÃçÁö°Ô ¼³Á¤
-                    AspectRatioFitter fitter = displayImage.GetComponent<AspectRatioFitter>();
-                    if (fitter != null)
+                    if (aspectFitter == null)
                     {
-                        fitter.aspectRatio = (float)width / height;
+                        aspectFitter = displayImage.GetComponent<AspectRatioFitter>();
+                        if (aspectFitter == null)
+                        {
+                            aspectFitter = displayImage.gameObject.AddComponent<AspectRatioFitter>();
+                            aspectFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+                        }
                     }
+                    aspectFitter.aspectRatio = (float)width / height;
                 }
             }
         }
@@ -103,16 +108,16 @@ public class CameraXYOLOInput : MonoBehaviour
 
     public void SetLinearZoom()
     {
-        zoomValue = slider.value; // ½½¶óÀÌ´õ¿¡¼­ ÇöÀç °ª °¡Á®¿À±â
+        zoomValue = slider.value; // ìŠ¬ë¼ì´ë”ì—ì„œ í˜„ì¬ ê°’ ê°€ì ¸ì˜¤ê¸°
         if (Application.platform == RuntimePlatform.Android)
         {
             if (cameraController != null)
             {
                 cameraController.Call("setLinearZoom", zoomValue);
-                Debug.Log($"Linear Zoom °ª Àü¼Û: {zoomValue}");
+                Debug.Log($"Linear Zoom ê°’ ì „ì†¡: {zoomValue}");
             }
         }
-        else Debug.Log("Android ÇÃ·§ÆûÀÌ ¾Æ´Õ´Ï´Ù.");
+        else Debug.Log("Android í”Œë«í¼ì´ ì•„ë‹™ë‹ˆë‹¤.");
     }
 
     public void SetZoomRatio(float ratio)
@@ -122,19 +127,19 @@ public class CameraXYOLOInput : MonoBehaviour
             if (cameraController != null)
             {
                 cameraController.Call("setZoomRatio", ratio);
-                Debug.Log($"Zoom Ratio °ª Àü¼Û: {ratio}");
+                Debug.Log($"Zoom Ratio ê°’ ì „ì†¡: {ratio}");
             }
         }
-        else Debug.Log("Android ÇÃ·§ÆûÀÌ ¾Æ´Õ´Ï´Ù.");
+        else Debug.Log("Android í”Œë«í¼ì´ ì•„ë‹™ë‹ˆë‹¤.");
     }
 
     void OnDestroy()
     {
-        // [¸Å¿ì Áß¿ä] °´Ã¼ Å½Áö ¾ÀÀÌ Á¾·áµÉ ¶§ ¹İµå½Ã Ä«¸Ş¶ó¸¦ ²¨ÁÖ¾î¾ß AR ¾À¿¡¼­ Ä«¸Ş¶ó¸¦ ¾µ ¼ö ÀÖ½À´Ï´Ù!
+        // [ë§¤ìš° ì¤‘ìš”] ê°ì²´ íƒì§€ ì”¬ì´ ì¢…ë£Œë  ë•Œ ë°˜ë“œì‹œ ì¹´ë©”ë¼ë¥¼ êº¼ì£¼ì–´ì•¼ AR ì”¬ì—ì„œ ì¹´ë©”ë¼ë¥¼ ì“¸ ìˆ˜ ìˆìŠµë‹ˆë‹¤!
         if (cameraController != null)
         {
             cameraController.Call("stopCamera");
-            Debug.Log("CameraX Á¾·á: Ä«¸Ş¶ó ±ÇÇÑÀ» ¹İÈ¯ÇÕ´Ï´Ù.");
+            Debug.Log("CameraX ì¢…ë£Œ: ì¹´ë©”ë¼ ê¶Œí•œì„ ë°˜í™˜í•©ë‹ˆë‹¤.");
         }
     }
 }
