@@ -34,6 +34,28 @@ public class CameraXYOLOInput : MonoBehaviour
 
     private const string PluginClassName = "com.example.unitycamerax.CameraXController";
 
+    [Header("Background Output")]
+    [SerializeField] private Material backgroundMaterial;
+    [SerializeField] private string backgroundTexturePropertyName = "_Step2BackgroundTex";
+    [SerializeField] private bool outputToBackground = true;
+
+    [Header("Preview RenderTexture")]
+    [SerializeField] private bool usePreviewRenderTexture = true;
+    [SerializeField] private int previewRTWidth = 1280;
+    [SerializeField] private int previewRTHeight = 720;
+    [SerializeField] private Material previewCopyMaterial; // 없으면 null로 둬도 됨
+
+    [Header("Debug View")]
+    [SerializeField] private bool outputToRawImage = false;
+
+    private int backgroundTexturePropertyId;
+    private RenderTexture previewRT;
+
+    private void Awake()
+    {
+        backgroundTexturePropertyId = Shader.PropertyToID(backgroundTexturePropertyName);
+    }
+
     private IEnumerator Start()
     {
         if (displayImage != null)
@@ -238,7 +260,7 @@ public class CameraXYOLOInput : MonoBehaviour
 
     private void UpdateCameraFeed()
     {
-        int width = 0;
+        /*int width = 0;
         int height = 0;
 
         try
@@ -295,6 +317,90 @@ public class CameraXYOLOInput : MonoBehaviour
             displayImage.texture = cameraTexture;
 
             // Android 카메라 프레임 상하 반전 보정
+            displayImage.uvRect = new Rect(0, 1, 1, -1);
+
+            if (aspectRatioFitter != null)
+                aspectRatioFitter.aspectRatio = (float)width / height;
+        }*/
+        int width = 0;
+        int height = 0;
+
+        try
+        {
+            width = cameraController.Call<int>("getFrameWidth");
+            height = cameraController.Call<int>("getFrameHeight");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] 프레임 크기 조회 실패: {e}");
+            return;
+        }
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        byte[] frameData = null;
+
+        try
+        {
+            frameData = cameraController.Call<byte[]>("getLatestFrameData");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CameraXYOLOInput] 프레임 데이터 조회 실패: {e}");
+            return;
+        }
+
+        if (frameData == null || frameData.Length == 0)
+            return;
+
+        int expectedLength = width * height * 4; // RGBA32 기준
+        if (frameData.Length < expectedLength)
+        {
+            Debug.LogWarning($"[CameraXYOLOInput] 프레임 데이터 길이가 예상보다 짧습니다. length={frameData.Length}, expected={expectedLength}");
+            return;
+        }
+
+        if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
+        {
+            if (cameraTexture != null)
+                Destroy(cameraTexture);
+
+            cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            cameraTexture.wrapMode = TextureWrapMode.Clamp;
+            cameraTexture.filterMode = FilterMode.Bilinear;
+        }
+
+        cameraTexture.LoadRawTextureData(frameData);
+        cameraTexture.Apply(false);
+
+        // 1) RenderTexture 준비
+        if (usePreviewRenderTexture)
+        {
+            CreateOrResizePreviewRT(width, height);
+
+            if (previewRT != null)
+            {
+                if (previewCopyMaterial != null)
+                    Graphics.Blit(cameraTexture, previewRT, previewCopyMaterial);
+                else
+                    Graphics.Blit(cameraTexture, previewRT);
+            }
+        }
+
+        // 2) 배경 출력
+        if (outputToBackground && backgroundMaterial != null)
+        {
+            if (usePreviewRenderTexture && previewRT != null)
+                backgroundMaterial.SetTexture(backgroundTexturePropertyId, previewRT);
+            else
+                backgroundMaterial.SetTexture(backgroundTexturePropertyId, cameraTexture);
+        }
+
+        // 3) 선택적 RawImage 출력
+        if (outputToRawImage && displayImage != null)
+        {
+            displayImage.texture = usePreviewRenderTexture && previewRT != null ? previewRT : cameraTexture;
             displayImage.uvRect = new Rect(0, 1, 1, -1);
 
             if (aspectRatioFitter != null)
@@ -410,6 +516,16 @@ public class CameraXYOLOInput : MonoBehaviour
 
     private void OnDestroy()
     {
+        /*StopCamera();
+
+        if (cameraTexture != null)
+        {
+            Destroy(cameraTexture);
+            cameraTexture = null;
+        }
+
+        cameraController = null;*/
+
         StopCamera();
 
         if (cameraTexture != null)
@@ -418,6 +534,44 @@ public class CameraXYOLOInput : MonoBehaviour
             cameraTexture = null;
         }
 
+        if (previewRT != null)
+        {
+            previewRT.Release();
+            Destroy(previewRT);
+            previewRT = null;
+        }
+
         cameraController = null;
+    }
+
+    private void CreateOrResizePreviewRT(int width, int height)
+    {
+        if (!usePreviewRenderTexture)
+            return;
+
+        int targetWidth = previewRTWidth > 0 ? previewRTWidth : width;
+        int targetHeight = previewRTHeight > 0 ? previewRTHeight : height;
+
+        if (previewRT != null &&
+            previewRT.width == targetWidth &&
+            previewRT.height == targetHeight)
+        {
+            return;
+        }
+
+        if (previewRT != null)
+        {
+            previewRT.Release();
+            Destroy(previewRT);
+        }
+
+        previewRT = new RenderTexture(targetWidth, targetHeight, 0, RenderTextureFormat.ARGB32);
+        previewRT.useMipMap = false;
+        previewRT.autoGenerateMips = false;
+        previewRT.wrapMode = TextureWrapMode.Clamp;
+        previewRT.filterMode = FilterMode.Bilinear;
+        previewRT.Create();
+
+        Debug.Log($"[CameraXYOLOInput] previewRT 생성: {targetWidth}x{targetHeight}");
     }
 }
