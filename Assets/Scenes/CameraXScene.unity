@@ -843,6 +843,8 @@ GameObject:
   - component: {fileID: 794914118}
   - component: {fileID: 794914119}
   - component: {fileID: 794914120}
+  - component: {fileID: 794914121}
+  - component: {fileID: 794914122}
   m_Layer: 0
   m_Name: CameraXYOLOInput
   m_TagString: Untagged
@@ -878,6 +880,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraXYOLOInput
   yoloProcessor: {fileID: 794914120}
+  permissionRequester: {fileID: 794914121}
+  useRawImagePreview: 0
   displayImage: {fileID: 1224465182}
   inferenceIntervalSeconds: 0.2
   slider: {fileID: 1998226810}
@@ -902,6 +906,32 @@ MonoBehaviour:
   isARMode: 0
   iouThreshold: 0.5
   scoreThreshold: 0.5
+--- !u!114 &794914121
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 794914117}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de1716c2de2c33e45ab97c2c42b32c28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraPermissionRequester
+--- !u!114 &794914122
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 794914117}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ecfeeecb53e75642a210bfd80b12064, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraFeedRenderBridge
+  frameSourceBehaviour: {fileID: 794914119}
+  flipY: 1
 --- !u!1 &881341273
 GameObject:
   m_ObjectHideFlags: 0
