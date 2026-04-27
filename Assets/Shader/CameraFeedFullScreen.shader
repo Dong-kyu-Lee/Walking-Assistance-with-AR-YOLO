@@ -10,6 +10,8 @@ Shader "Hidden/CameraFeed/FullScreen"
 
         Pass
         {
+            Name "CameraFeedFullScreen"
+
             ZWrite Off
             ZTest Always
             Cull Off
@@ -19,6 +21,8 @@ Shader "Hidden/CameraFeed/FullScreen"
             #pragma vertex Vert
             #pragma fragment Frag
 
+            // 중요: Blit.hlsl보다 먼저 Core.hlsl을 include
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
             TEXTURE2D(_CameraFeedTex);
@@ -28,6 +32,8 @@ Shader "Hidden/CameraFeed/FullScreen"
 
             half4 Frag(Varyings input) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
                 float2 uv = input.texcoord.xy;
                 uv = uv * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
 
