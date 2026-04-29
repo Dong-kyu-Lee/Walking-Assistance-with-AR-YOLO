@@ -111,7 +111,7 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
-        if (maskTexture != null) Destroy(maskTexture);
+        if (maskTexture != null) { Destroy(maskTexture); maskTexture = null; }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
