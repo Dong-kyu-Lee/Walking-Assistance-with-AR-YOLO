@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.InferenceEngine;
@@ -34,7 +34,7 @@ public class RunYOLO : MonoBehaviour
 
     public bool IsModelLoaded { get { return isModelLoaded; } }
 
-    const BackendType backend = BackendType.GPUCompute;
+    const BackendType backend = BackendType.CPU;
 
     private Transform displayLocation;
     private Worker worker;
@@ -45,15 +45,17 @@ public class RunYOLO : MonoBehaviour
 
     private Tensor<float> inputTensor;
 
-    //Image size for the model
     private const int imageWidth = 640;
     private const int imageHeight = 640;
+    private const int maskResolution = 160;
 
-    List<GameObject> boxPool = new();
+    List<GameObject> boxPool = new List<GameObject>();
+
+    private Texture2D maskTexture;
 
     [Tooltip("Intersection over union threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
-    float iouThreshold = 0.5f;
+    float iouThreshold = 0.45f;
 
     [Tooltip("Confidence score threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
@@ -79,6 +81,19 @@ public class RunYOLO : MonoBehaviour
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
         inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
 
+        maskTexture = new Texture2D(maskResolution, maskResolution, TextureFormat.RGBA32, false);
+
+        GameObject maskObj = new GameObject("MaskOverlay");
+        maskObj.transform.SetParent(displayImage.transform, false);
+        var maskRect = maskObj.AddComponent<RectTransform>();
+        maskRect.anchorMin = Vector2.zero;
+        maskRect.anchorMax = Vector2.one;
+        maskRect.offsetMin = Vector2.zero;
+        maskRect.offsetMax = Vector2.zero;
+        var maskRawImage = maskObj.AddComponent<RawImage>();
+        maskRawImage.texture = maskTexture;
+        maskRawImage.raycastTarget = false;
+
         displayLocation = displayImage.transform;
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
 
@@ -87,8 +102,6 @@ public class RunYOLO : MonoBehaviour
 
     void LoadModel()
     {
-        // 💡 [핵심 변경점] Sentis의 복잡한 그래프 Slicing 제거! 
-        // 모델을 원본 그대로 로드하고 즉시 Worker에 할당합니다.
         var model = ModelLoader.Load(modelAsset);
         worker = new Worker(model, backend);
         Debug.Log("모델 로드");
@@ -98,6 +111,7 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
+        if (maskTexture != null) Destroy(maskTexture);
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
@@ -107,60 +121,80 @@ public class RunYOLO : MonoBehaviour
         if (sourceTexture == null) yield break;
 
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-        // if (!isARMode) displayImage.texture = targetRT;
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
         worker.Schedule(inputTensor);
 
-        // 1. 단 하나의 원본 출력 텐서만 가져오기
-        var outputTensor = worker.PeekOutput() as Tensor<float>;
-        outputTensor.ReadbackRequest();
+        var output0 = worker.PeekOutput("output0") as Tensor<float>;
+        var output1 = worker.PeekOutput("output1") as Tensor<float>;
 
-        while (!outputTensor.IsReadbackRequestDone())
+        output0.ReadbackRequest();
+        output1.ReadbackRequest();
+
+        while (!output0.IsReadbackRequestDone() || !output1.IsReadbackRequestDone())
         {
             yield return null;
         }
 
-        // 2. 모델의 형태(Shape)를 동적으로 파악
-        // (YOLO 모델에 따라 [1, 84, 8400] 형태일 수도, [1, 8400, 84] 형태일 수도 있음)
-        var shape = outputTensor.shape;
-        int dim1 = shape.rank > 1 ? shape[shape.rank - 2] : 1;
-        int dim2 = shape.rank > 0 ? shape[shape.rank - 1] : 1;
+        var shape0 = output0.shape;
+        int dim1 = shape0.rank > 1 ? shape0[shape0.rank - 2] : 1;
+        int dim2 = shape0.rank > 0 ? shape0[shape0.rank - 1] : 1;
 
-        // 더 긴 쪽이 앵커(박스) 개수, 짧은 쪽이 속성(4개 좌표 + N개 클래스)
         int numAnchors = math.max(dim1, dim2);
         int numAttributes = math.min(dim1, dim2);
-        int numClasses = numAttributes - 4;
+        int numMaskWeights = 32;
+        int numClasses = numAttributes - 4 - numMaskWeights;
         bool isTransposed = (dim1 == numAnchors);
 
-        // 3. 네이티브 배열 다운로드
-        var outputData = outputTensor.DownloadToNativeArray();
+        var outputData0 = output0.DownloadToNativeArray();
+        var outputData1 = output1.DownloadToNativeArray();
 
-        // Job에서 파싱된 결과를 바로 담을 리스트 (좌표, 점수, 클래스ID가 하나로 통합됨)
         var resultBoxes = new NativeList<BoxData>(Allocator.TempJob);
+        // NMS 통과 박스별 32개 가중치를 순서대로 저장 (b번째 박스 → [b*32 .. b*32+31])
+        var resultWeights = new NativeList<float>(Allocator.TempJob);
+        // NativeArray<Color32>는 생성 시 (0,0,0,0) 투명으로 초기화되므로 별도 clear 불필요
+        var maskPixels = new NativeArray<Color32>(maskResolution * maskResolution, Allocator.TempJob);
 
         try
         {
             var nmsJob = new NMSJob
             {
-                outputData = outputData,
+                outputData = outputData0,
                 numAnchors = numAnchors,
                 numClasses = numClasses,
+                numMaskWeights = numMaskWeights,
                 isTransposed = isTransposed,
                 iouThreshold = iouThreshold,
                 scoreThreshold = scoreThreshold,
-                resultBoxes = resultBoxes
+                resultBoxes = resultBoxes,
+                resultWeights = resultWeights
             };
-
             nmsJob.Schedule().Complete();
+
+            var maskJob = new MaskGenerationJob
+            {
+                prototypes = outputData1,
+                boxes = resultBoxes.AsArray(),
+                maskWeights = resultWeights.AsArray(),
+                maskPixels = maskPixels,
+                maskRes = maskResolution,
+                imgRes = imageWidth,
+                numMaskWeights = numMaskWeights
+            };
+            maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
+
+            maskTexture.SetPixelData(maskPixels, 0);
+            maskTexture.Apply();
 
             ProcessResults(resultBoxes);
         }
         finally
         {
-            // 메모리 누수 완벽 방지
             if (resultBoxes.IsCreated) resultBoxes.Dispose();
-            if (outputData.IsCreated) outputData.Dispose();
+            if (resultWeights.IsCreated) resultWeights.Dispose();
+            if (outputData0.IsCreated) outputData0.Dispose();
+            if (outputData1.IsCreated) outputData1.Dispose();
+            if (maskPixels.IsCreated) maskPixels.Dispose();
         }
     }
 
@@ -245,7 +279,6 @@ public class RunYOLO : MonoBehaviour
     }
 }
 
-// Job System 전용 경계 상자 구조체
 public struct BoxData
 {
     public float cx, cy, w, h;
@@ -260,29 +293,31 @@ public struct NMSJob : IJob
 
     public int numAnchors;
     public int numClasses;
+    public int numMaskWeights;
     public bool isTransposed;
 
     public float iouThreshold;
     public float scoreThreshold;
 
     public NativeList<BoxData> resultBoxes;
+    // 각 결과 박스의 마스크 가중치 (numMaskWeights개씩 순서대로 저장)
+    public NativeList<float> resultWeights;
 
     public void Execute()
     {
-        // 1. 임계치를 넘는 후보군 추출
-        NativeList<BoxData> candidates = new NativeList<BoxData>(numAnchors, Allocator.Temp);
+        var candidates = new NativeList<BoxData>(numAnchors, Allocator.Temp);
+        // candidates와 1:1 대응하는 가중치 (numMaskWeights개씩 연속 저장)
+        var candWeights = new NativeList<float>(numAnchors * numMaskWeights, Allocator.Temp);
 
         for (int a = 0; a < numAnchors; a++)
         {
             float maxScore = -1f;
             int bestClassID = -1;
 
-            // 각 앵커에 대해 가장 높은 클래스 점수 찾기
             for (int c = 0; c < numClasses; c++)
             {
-                // 데이터 배열이 가로로 긴지 세로로 긴지에 따라 인덱스 접근 방식 변경
                 float score = isTransposed
-                    ? outputData[a * (numClasses + 4) + (c + 4)]
+                    ? outputData[a * (4 + numClasses + numMaskWeights) + (c + 4)]
                     : outputData[(c + 4) * numAnchors + a];
 
                 if (score > maxScore)
@@ -298,28 +333,32 @@ public struct NMSJob : IJob
                 box.score = maxScore;
                 box.classID = bestClassID;
 
-                // 좌표 데이터 추출 (첫 4개 원소)
                 if (isTransposed)
                 {
-                    int baseIdx = a * (numClasses + 4);
+                    int baseIdx = a * (4 + numClasses + numMaskWeights);
                     box.cx = outputData[baseIdx + 0];
                     box.cy = outputData[baseIdx + 1];
-                    box.w = outputData[baseIdx + 2];
-                    box.h = outputData[baseIdx + 3];
+                    box.w  = outputData[baseIdx + 2];
+                    box.h  = outputData[baseIdx + 3];
+
+                    for (int w = 0; w < numMaskWeights; w++)
+                        candWeights.Add(outputData[baseIdx + 4 + numClasses + w]);
                 }
                 else
                 {
                     box.cx = outputData[0 * numAnchors + a];
                     box.cy = outputData[1 * numAnchors + a];
-                    box.w = outputData[2 * numAnchors + a];
-                    box.h = outputData[3 * numAnchors + a];
+                    box.w  = outputData[2 * numAnchors + a];
+                    box.h  = outputData[3 * numAnchors + a];
+
+                    for (int w = 0; w < numMaskWeights; w++)
+                        candWeights.Add(outputData[(4 + numClasses + w) * numAnchors + a]);
                 }
 
                 candidates.Add(box);
             }
         }
 
-        // 2. NMS (비최대 억제) 루프 실행
         while (candidates.Length > 0)
         {
             int maxIdx = 0;
@@ -336,6 +375,8 @@ public struct NMSJob : IJob
 
             BoxData bestBox = candidates[maxIdx];
             resultBoxes.Add(bestBox);
+            for (int w = 0; w < numMaskWeights; w++)
+                resultWeights.Add(candWeights[maxIdx * numMaskWeights + w]);
 
             float bMinX = bestBox.cx - bestBox.w / 2f;
             float bMinY = bestBox.cy - bestBox.h / 2f;
@@ -343,42 +384,116 @@ public struct NMSJob : IJob
             float bMaxY = bestBox.cy + bestBox.h / 2f;
             float bArea = bestBox.w * bestBox.h;
 
+            // 역방향 순회: RemoveAtSwapBack 시 아직 미방문 인덱스만 교체됨
             for (int i = candidates.Length - 1; i >= 0; i--)
             {
-                if (i == maxIdx)
+                bool remove = (i == maxIdx);
+
+                if (!remove && candidates[i].classID == bestBox.classID)
                 {
-                    candidates.RemoveAtSwapBack(i);
-                    continue;
+                    BoxData cBox = candidates[i];
+                    float cMinX = cBox.cx - cBox.w / 2f;
+                    float cMinY = cBox.cy - cBox.h / 2f;
+                    float cMaxX = cBox.cx + cBox.w / 2f;
+                    float cMaxY = cBox.cy + cBox.h / 2f;
+                    float cArea = cBox.w * cBox.h;
+
+                    float interMinX = math.max(bMinX, cMinX);
+                    float interMinY = math.max(bMinY, cMinY);
+                    float interMaxX = math.min(bMaxX, cMaxX);
+                    float interMaxY = math.min(bMaxY, cMaxY);
+
+                    float interW = math.max(0, interMaxX - interMinX);
+                    float interH = math.max(0, interMaxY - interMinY);
+                    float interArea = interW * interH;
+
+                    float unionArea = bArea + cArea - interArea;
+                    float iou = unionArea > 0f ? interArea / unionArea : 0f;
+
+                    remove = (iou >= iouThreshold);
                 }
 
-                BoxData cBox = candidates[i];
-                if (cBox.classID != bestBox.classID) continue;
-
-                float cMinX = cBox.cx - cBox.w / 2f;
-                float cMinY = cBox.cy - cBox.h / 2f;
-                float cMaxX = cBox.cx + cBox.w / 2f;
-                float cMaxY = cBox.cy + cBox.h / 2f;
-                float cArea = cBox.w * cBox.h;
-
-                float interMinX = math.max(bMinX, cMinX);
-                float interMinY = math.max(bMinY, cMinY);
-                float interMaxX = math.min(bMaxX, cMaxX);
-                float interMaxY = math.min(bMaxY, cMaxY);
-
-                float interW = math.max(0, interMaxX - interMinX);
-                float interH = math.max(0, interMaxY - interMinY);
-                float interArea = interW * interH;
-
-                float unionArea = bArea + cArea - interArea;
-                float iou = unionArea > 0f ? interArea / unionArea : 0f;
-
-                if (iou >= iouThreshold)
+                if (remove)
                 {
+                    // candidates와 candWeights를 동시에 SwapBack 제거
+                    int lastIdx = candidates.Length - 1;
+                    if (i != lastIdx)
+                    {
+                        for (int w = 0; w < numMaskWeights; w++)
+                            candWeights[i * numMaskWeights + w] = candWeights[lastIdx * numMaskWeights + w];
+                    }
+                    for (int w = 0; w < numMaskWeights; w++)
+                        candWeights.RemoveAtSwapBack(candWeights.Length - 1);
+
                     candidates.RemoveAtSwapBack(i);
                 }
             }
         }
 
         candidates.Dispose();
+        candWeights.Dispose();
+    }
+}
+
+[BurstCompile]
+public struct MaskGenerationJob : IJobParallelFor
+{
+    [ReadOnly] public NativeArray<float> prototypes;
+    [ReadOnly] public NativeArray<BoxData> boxes;
+    // 각 박스의 마스크 가중치: boxes[b]의 가중치는 maskWeights[b*numMaskWeights .. (b+1)*numMaskWeights-1]
+    [ReadOnly] public NativeArray<float> maskWeights;
+
+    // Execute(index)가 texIdx(Y축 반전 적용)에 쓰므로 Unity Safety System 경고 억제 필요
+    [NativeDisableParallelForRestriction]
+    public NativeArray<Color32> maskPixels;
+
+    public int maskRes;
+    public int imgRes;
+    public int numMaskWeights;
+
+    public void Execute(int index)
+    {
+        if (boxes.Length == 0) return;
+
+        int x = index % maskRes;
+        int y = index / maskRes;
+
+        float scale = (float)imgRes / maskRes;
+        float imgX = x * scale;
+        float imgY = y * scale;
+
+        bool isMasked = false;
+
+        for (int b = 0; b < boxes.Length; b++)
+        {
+            var box = boxes[b];
+
+            if (imgX < box.cx - box.w / 2f || imgX > box.cx + box.w / 2f ||
+                imgY < box.cy - box.h / 2f || imgY > box.cy + box.h / 2f)
+                continue;
+
+            float maskVal = 0f;
+            int weightBase = b * numMaskWeights;
+            for (int p = 0; p < numMaskWeights; p++)
+            {
+                int protoIdx = p * (maskRes * maskRes) + y * maskRes + x;
+                maskVal += maskWeights[weightBase + p] * prototypes[protoIdx];
+            }
+
+            float sigmoid = 1f / (1f + math.exp(-maskVal));
+
+            if (sigmoid > 0.5f)
+            {
+                isMasked = true;
+                break;
+            }
+        }
+
+        if (isMasked)
+        {
+            // Unity 텍스처 좌표계는 아래가 origin이므로 Y축 반전 적용
+            int texIdx = (maskRes - 1 - y) * maskRes + x;
+            maskPixels[texIdx] = new Color32(255, 50, 50, 150);
+        }
     }
 }
