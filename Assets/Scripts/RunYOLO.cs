@@ -8,7 +8,6 @@ using Unity.Jobs;
 using Unity.Collections;
 using Unity.Burst;
 using Unity.Mathematics;
-using Unity.Profiling;
 
 public class RunYOLO : MonoBehaviour
 {
@@ -59,27 +58,6 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Confidence score threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
     float scoreThreshold = 0.5f;
-
-    private static readonly ProfilerMarker MarkerBlit =
-    new ProfilerMarker("YOLO.BlitToInputRT");
-
-    private static readonly ProfilerMarker MarkerToTensor =
-        new ProfilerMarker("YOLO.TextureToTensor");
-
-    private static readonly ProfilerMarker MarkerSchedule =
-        new ProfilerMarker("YOLO.WorkerSchedule");
-
-    private static readonly ProfilerMarker MarkerReadbackWait =
-        new ProfilerMarker("YOLO.ReadbackWait");
-
-    private static readonly ProfilerMarker MarkerDownload =
-        new ProfilerMarker("YOLO.DownloadToNativeArray");
-
-    private static readonly ProfilerMarker MarkerNMS =
-        new ProfilerMarker("YOLO.NMSJob");
-
-    private static readonly ProfilerMarker MarkerProcessResults =
-        new ProfilerMarker("YOLO.ProcessResults");
 
     public struct BoundingBox
     {
@@ -134,35 +112,23 @@ public class RunYOLO : MonoBehaviour
         //ClearAnnotations();
 
         if (sourceTexture == null) yield break;
-        using (MarkerBlit.Auto())
-        {
-            Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-            // if (!isARMode) displayImage.texture = targetRT;
-        }
 
-        using (MarkerToTensor.Auto())
-        {
-            TextureConverter.ToTensor(targetRT, inputTensor, default);
-            
-        }
-            
-        using (MarkerSchedule.Auto())
-        {
-            worker.Schedule(inputTensor);
-        }
+        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+        // if (!isARMode) displayImage.texture = targetRT;
+
+        TextureConverter.ToTensor(targetRT, inputTensor, default);
+
+        worker.Schedule(inputTensor);
 
         // 1. 단 하나의 원본 출력 텐서만 가져오기
         var outputTensor = worker.PeekOutput() as Tensor<float>;
         outputTensor.ReadbackRequest();
 
-        using (MarkerReadbackWait.Auto())
+        while (!outputTensor.IsReadbackRequestDone())
         {
-            while (!outputTensor.IsReadbackRequestDone())
-            {
-                yield return null;
-            }
+            yield return null;
         }
-        
+
 
         // 2. 모델의 형태(Shape)를 동적으로 파악
         // (YOLO 모델에 따라 [1, 84, 8400] 형태일 수도, [1, 8400, 84] 형태일 수도 있음)
@@ -177,11 +143,7 @@ public class RunYOLO : MonoBehaviour
         bool isTransposed = (dim1 == numAnchors);
 
         // 3. 네이티브 배열 다운로드
-        NativeArray<float> outputData;
-        using (MarkerDownload.Auto())
-        {
-            outputData = outputTensor.DownloadToNativeArray();
-        }
+        NativeArray<float> outputData = outputTensor.DownloadToNativeArray();
         
 
         // Job에서 파싱된 결과를 바로 담을 리스트 (좌표, 점수, 클래스ID가 하나로 통합됨)
@@ -189,27 +151,21 @@ public class RunYOLO : MonoBehaviour
 
         try
         {
-            using (MarkerNMS.Auto())
+            var nmsJob = new NMSJob
             {
-                var nmsJob = new NMSJob
-                {
-                    outputData = outputData,
-                    numAnchors = numAnchors,
-                    numClasses = numClasses,
-                    isTransposed = isTransposed,
-                    iouThreshold = iouThreshold,
-                    scoreThreshold = scoreThreshold,
-                    resultBoxes = resultBoxes
-                };
+                outputData = outputData,
+                numAnchors = numAnchors,
+                numClasses = numClasses,
+                isTransposed = isTransposed,
+                iouThreshold = iouThreshold,
+                scoreThreshold = scoreThreshold,
+                resultBoxes = resultBoxes
+            };
 
-                nmsJob.Schedule().Complete();
-            }
-                
-            using (MarkerProcessResults.Auto())
-            {
-                ProcessResults(resultBoxes);
-            }
-            
+            nmsJob.Schedule().Complete();
+
+            ProcessResults(resultBoxes);
+
         }
         finally
         {
