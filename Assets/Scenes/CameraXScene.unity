@@ -933,6 +933,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraFeedRenderBridge
   frameSourceBehaviour: {fileID: 794914119}
   flipY: 1
+  viewScale: 1
+  viewCenter: {x: 0.5, y: 0.5}
+  backgroundColor: {r: 0.225627, g: 0.6132076, b: 0, a: 1}
 --- !u!1 &881341273
 GameObject:
   m_ObjectHideFlags: 0

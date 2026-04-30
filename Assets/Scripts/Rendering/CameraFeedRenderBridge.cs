@@ -9,6 +9,11 @@ public class CameraFeedRenderBridge : MonoBehaviour
     [Header("Texture Options")]
     [SerializeField] private bool flipY = true;
 
+    [Header("View Options")]
+    [SerializeField] private float viewScale = 1f;
+    [SerializeField] private Vector2 viewCenter = new Vector2(0.5f, 0.5f);
+    [SerializeField] private Color backgroundColor = Color.black;
+
     private ICameraFrameSource frameSource;
 
     private void Awake()
@@ -19,6 +24,13 @@ public class CameraFeedRenderBridge : MonoBehaviour
         {
             Debug.LogError("frameSourceBehaviour는 ICameraFrameSource를 구현해야 합니다.");
         }
+    }
+
+    private void Update()
+    {
+        Shader.SetGlobalFloat(CameraFeedShaderIds.ViewScale, viewScale);
+        Shader.SetGlobalVector(CameraFeedShaderIds.ViewCenter, viewCenter);
+        Shader.SetGlobalColor(CameraFeedShaderIds.BackgroundColor, backgroundColor);
     }
 
     private void LateUpdate()
