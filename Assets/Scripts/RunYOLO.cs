@@ -111,18 +111,26 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
+
+        if (targetRT != null)
+        {
+            targetRT.Release();
+            Destroy(targetRT);
+            targetRT = null;
+        }
         if (maskTexture != null) { Destroy(maskTexture); maskTexture = null; }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
     {
-        ClearAnnotations();
+        //ClearAnnotations();
 
         if (sourceTexture == null) yield break;
 
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
+
         worker.Schedule(inputTensor);
 
         var output0 = worker.PeekOutput("output0") as Tensor<float>;
@@ -187,6 +195,7 @@ public class RunYOLO : MonoBehaviour
             maskTexture.Apply();
 
             ProcessResults(resultBoxes);
+
         }
         finally
         {
@@ -220,6 +229,17 @@ public class RunYOLO : MonoBehaviour
                 label = (b.classID >= 0 && b.classID < labels.Length) ? labels[b.classID] : "Unknown",
             };
             DrawBox(box, i, displayHeight * 0.05f);
+        }
+
+        HideUnusedBoxes(boxesFound);
+    }
+
+    private void HideUnusedBoxes(int usedCount)
+    {
+        for (int i = usedCount; i < boxPool.Count; i++)
+        {
+            if (boxPool[i].activeSelf)
+                boxPool[i].SetActive(false);
         }
     }
 
