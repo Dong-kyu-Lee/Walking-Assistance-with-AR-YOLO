@@ -61,6 +61,8 @@ public class RunYOLO : MonoBehaviour
     [SerializeField, Range(0, 1)]
     float scoreThreshold = 0.5f;
 
+    [SerializeField] private RectTransform detectionOverlayRoot;
+
     public struct BoundingBox
     {
         public float centerX;
@@ -209,8 +211,11 @@ public class RunYOLO : MonoBehaviour
 
     private void ProcessResults(NativeList<BoxData> resultBoxes)
     {
-        float displayWidth = displayImage.rectTransform.rect.width;
-        float displayHeight = displayImage.rectTransform.rect.height;
+        RectTransform targetRect = detectionOverlayRoot != null ?
+            detectionOverlayRoot : displayImage.rectTransform;
+
+        float displayWidth = targetRect.rect.width;
+        float displayHeight = targetRect.rect.height;
         float scaleX = displayWidth / (float)imageWidth;
         float scaleY = displayHeight / (float)imageHeight;
 
