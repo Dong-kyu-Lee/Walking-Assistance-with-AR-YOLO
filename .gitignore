@@ -109,3 +109,7 @@ config.json
 
 # Android Key Data
 user.keystore
+
+# Profiler Data
+ProfileAnalyzer/
+ProfilerCaptures/
