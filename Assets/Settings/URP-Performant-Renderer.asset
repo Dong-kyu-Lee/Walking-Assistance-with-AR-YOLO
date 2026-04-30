@@ -15,7 +15,7 @@ MonoBehaviour:
   m_Active: 1
   settings:
     material: {fileID: 2100000, guid: d0fe7dca9504ff34eac65028f9427180, type: 2}
-    renderPassEvent: 500
+    renderPassEvent: 450
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -84,4 +84,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ae4d376c05df421b98c5b39b25b0d29, type: 3}
   m_Name: ARBackgroundRendererFeature
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0

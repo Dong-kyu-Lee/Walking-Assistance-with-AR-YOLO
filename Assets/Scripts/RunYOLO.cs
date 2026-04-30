@@ -8,6 +8,7 @@ using Unity.Jobs;
 using Unity.Collections;
 using Unity.Burst;
 using Unity.Mathematics;
+using Unity.Profiling;
 
 public class RunYOLO : MonoBehaviour
 {
@@ -34,7 +35,7 @@ public class RunYOLO : MonoBehaviour
 
     public bool IsModelLoaded { get { return isModelLoaded; } }
 
-    const BackendType backend = BackendType.GPUCompute;
+    const BackendType backend = BackendType.CPU;
 
     private Transform displayLocation;
     private Worker worker;
@@ -58,6 +59,27 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Confidence score threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
     float scoreThreshold = 0.5f;
+
+    private static readonly ProfilerMarker MarkerBlit =
+    new ProfilerMarker("YOLO.BlitToInputRT");
+
+    private static readonly ProfilerMarker MarkerToTensor =
+        new ProfilerMarker("YOLO.TextureToTensor");
+
+    private static readonly ProfilerMarker MarkerSchedule =
+        new ProfilerMarker("YOLO.WorkerSchedule");
+
+    private static readonly ProfilerMarker MarkerReadbackWait =
+        new ProfilerMarker("YOLO.ReadbackWait");
+
+    private static readonly ProfilerMarker MarkerDownload =
+        new ProfilerMarker("YOLO.DownloadToNativeArray");
+
+    private static readonly ProfilerMarker MarkerNMS =
+        new ProfilerMarker("YOLO.NMSJob");
+
+    private static readonly ProfilerMarker MarkerProcessResults =
+        new ProfilerMarker("YOLO.ProcessResults");
 
     public struct BoundingBox
     {
@@ -98,28 +120,49 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
+
+        if (targetRT != null)
+        {
+            targetRT.Release();
+            Destroy(targetRT);
+            targetRT = null;
+        }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
     {
-        ClearAnnotations();
+        //ClearAnnotations();
 
         if (sourceTexture == null) yield break;
+        using (MarkerBlit.Auto())
+        {
+            Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+            // if (!isARMode) displayImage.texture = targetRT;
+        }
 
-        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
-        // if (!isARMode) displayImage.texture = targetRT;
-
-        TextureConverter.ToTensor(targetRT, inputTensor, default);
-        worker.Schedule(inputTensor);
+        using (MarkerToTensor.Auto())
+        {
+            TextureConverter.ToTensor(targetRT, inputTensor, default);
+            
+        }
+            
+        using (MarkerSchedule.Auto())
+        {
+            worker.Schedule(inputTensor);
+        }
 
         // 1. 단 하나의 원본 출력 텐서만 가져오기
         var outputTensor = worker.PeekOutput() as Tensor<float>;
         outputTensor.ReadbackRequest();
 
-        while (!outputTensor.IsReadbackRequestDone())
+        using (MarkerReadbackWait.Auto())
         {
-            yield return null;
+            while (!outputTensor.IsReadbackRequestDone())
+            {
+                yield return null;
+            }
         }
+        
 
         // 2. 모델의 형태(Shape)를 동적으로 파악
         // (YOLO 모델에 따라 [1, 84, 8400] 형태일 수도, [1, 8400, 84] 형태일 수도 있음)
@@ -134,27 +177,39 @@ public class RunYOLO : MonoBehaviour
         bool isTransposed = (dim1 == numAnchors);
 
         // 3. 네이티브 배열 다운로드
-        var outputData = outputTensor.DownloadToNativeArray();
+        NativeArray<float> outputData;
+        using (MarkerDownload.Auto())
+        {
+            outputData = outputTensor.DownloadToNativeArray();
+        }
+        
 
         // Job에서 파싱된 결과를 바로 담을 리스트 (좌표, 점수, 클래스ID가 하나로 통합됨)
         var resultBoxes = new NativeList<BoxData>(Allocator.TempJob);
 
         try
         {
-            var nmsJob = new NMSJob
+            using (MarkerNMS.Auto())
             {
-                outputData = outputData,
-                numAnchors = numAnchors,
-                numClasses = numClasses,
-                isTransposed = isTransposed,
-                iouThreshold = iouThreshold,
-                scoreThreshold = scoreThreshold,
-                resultBoxes = resultBoxes
-            };
+                var nmsJob = new NMSJob
+                {
+                    outputData = outputData,
+                    numAnchors = numAnchors,
+                    numClasses = numClasses,
+                    isTransposed = isTransposed,
+                    iouThreshold = iouThreshold,
+                    scoreThreshold = scoreThreshold,
+                    resultBoxes = resultBoxes
+                };
 
-            nmsJob.Schedule().Complete();
-
-            ProcessResults(resultBoxes);
+                nmsJob.Schedule().Complete();
+            }
+                
+            using (MarkerProcessResults.Auto())
+            {
+                ProcessResults(resultBoxes);
+            }
+            
         }
         finally
         {
@@ -186,6 +241,17 @@ public class RunYOLO : MonoBehaviour
                 label = (b.classID >= 0 && b.classID < labels.Length) ? labels[b.classID] : "Unknown",
             };
             DrawBox(box, i, displayHeight * 0.05f);
+        }
+
+        HideUnusedBoxes(boxesFound);
+    }
+
+    private void HideUnusedBoxes(int usedCount)
+    {
+        for (int i = usedCount; i < boxPool.Count; i++)
+        {
+            if (boxPool[i].activeSelf)
+                boxPool[i].SetActive(false);
         }
     }
 

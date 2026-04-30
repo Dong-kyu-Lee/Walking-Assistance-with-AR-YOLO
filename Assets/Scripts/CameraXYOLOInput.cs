@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using Unity.Profiling;
 
 public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 {
@@ -17,7 +18,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     [Header("Optimization Settings")]
     [Range(0.1f, 2.0f)]
     [Tooltip("YOLO 추론 주기 (초 단위). 예: 0.2초 = 5FPS")]
-    public float inferenceIntervalSeconds = 0.2f;
+    public float inferenceIntervalSeconds = 0.5f;
+    [Tooltip("카메라 프레임 업데이트 주기 값")]
+    public float CameraUpdateInterval = 1f / 30f;
+    private float cameraUpdateTimer = 0f;
 
     [Header("Zoom UI")]
     [SerializeField] private Slider slider;
@@ -30,16 +34,28 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     private bool isProcessing = false;
     private float inferenceTimer = 0f;
 
+    private int lastWidth = 0;
+    private int lastHeight = 0;
+
     public Texture FrameTexture => cameraTexture;
     public int FrameWidth => cameraTexture != null ? cameraTexture.width : 0;
     public int FrameHeight => cameraTexture != null ? cameraTexture.height : 0;
     public bool HasFrame => cameraTexture != null && cameraTexture.width > 16 && cameraTexture.height > 16;
 
+    private static readonly ProfilerMarker MarkerGetFrameData =
+    new ProfilerMarker("CameraX.GetLatestFrameData");
+
+    private static readonly ProfilerMarker MarkerTextureUpload =
+        new ProfilerMarker("CameraX.TextureUpload");
+
+    private static readonly ProfilerMarker MarkerYOLO =
+        new ProfilerMarker("YOLO.ExecuteML");
+
     private IEnumerator Start()
     {
         if (Application.platform != RuntimePlatform.Android)
         {
-            Debug.Log("Android 플랫폼이 아니므로 CameraX를 시작하지 않습니다.");
+            //Debug.Log("Android 플랫폼이 아니므로 CameraX를 시작하지 않습니다.");
             yield break;
         }
 
@@ -57,7 +73,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
         if (!permissionRequester.IsGranted)
         {
-            Debug.LogWarning("카메라 권한이 승인되지 않아 CameraX를 시작하지 않습니다.");
+            //Debug.LogWarning("카메라 권한이 승인되지 않아 CameraX를 시작하지 않습니다.");
             yield break;
         }
 
@@ -76,11 +92,11 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
             cameraController.Call("startCamera");
 
-            Debug.Log("CameraX 초기화 명령 전송 완료");
+            //Debug.Log("CameraX 초기화 명령 전송 완료");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"CameraX 초기화 실패: {e.Message}");
+            //Debug.LogError($"CameraX 초기화 실패: {e.Message}");
         }
     }
 
@@ -89,7 +105,15 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         if (cameraController == null)
             return;
 
-        UpdateCameraFeed();
+        cameraUpdateTimer += Time.deltaTime;
+
+        if (cameraUpdateTimer >= CameraUpdateInterval)
+        {
+            cameraUpdateTimer = 0f;
+            UpdateCameraFeed();
+        }
+
+        //UpdateCameraFeed();
 
         if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
         {
@@ -105,13 +129,18 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private void UpdateCameraFeed()
     {
+
         int width = cameraController.Call<int>("getFrameWidth");
         int height = cameraController.Call<int>("getFrameHeight");
 
         if (width <= 0 || height <= 0)
             return;
 
-        byte[] frameData = cameraController.Call<byte[]>("getLatestFrameData");
+        byte[] frameData;
+        using (MarkerGetFrameData.Auto())
+        {
+            frameData = cameraController.Call<byte[]>("getLatestFrameData");
+        }
 
         if (frameData == null || frameData.Length <= 0)
             return;
@@ -120,36 +149,49 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         {
             cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         }
-
-        cameraTexture.LoadRawTextureData(frameData);
-        cameraTexture.Apply();
-
+        using (MarkerTextureUpload.Auto())
+        {
+            cameraTexture.LoadRawTextureData(frameData);
+            cameraTexture.Apply();
+        }
+        
         // Render Feature를 사용할 경우 RawImage 출력은 필수가 아님.
         // 디버그용 미리보기로만 사용.
-        if (useRawImagePreview && displayImage != null)
-        {
-            displayImage.texture = cameraTexture;
-            displayImage.uvRect = new Rect(0, 1, 1, -1);
 
-            if (aspectFitter == null)
+        if (width != lastWidth || height != lastHeight)
+        {
+            lastWidth = width;
+            lastHeight = height;
+
+            if (useRawImagePreview && displayImage != null)
             {
-                aspectFitter = displayImage.GetComponent<AspectRatioFitter>();
+                displayImage.texture = cameraTexture;
+                displayImage.uvRect = new Rect(0, 1, 1, -1);
 
                 if (aspectFitter == null)
                 {
-                    aspectFitter = displayImage.gameObject.AddComponent<AspectRatioFitter>();
-                    aspectFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-                }
-            }
+                    aspectFitter = displayImage.GetComponent<AspectRatioFitter>();
 
-            aspectFitter.aspectRatio = (float)width / height;
+                    if (aspectFitter == null)
+                    {
+                        aspectFitter = displayImage.gameObject.AddComponent<AspectRatioFitter>();
+                        aspectFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+                    }
+                }
+
+                aspectFitter.aspectRatio = (float)width / height;
+            }
         }
+
+        
     }
 
     private IEnumerator RunInference()
     {
         isProcessing = true;
+        MarkerYOLO.Begin();
         yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
+        MarkerYOLO.End();
         isProcessing = false;
     }
 
@@ -157,7 +199,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     {
         if (slider == null)
         {
-            Debug.LogWarning("Slider가 연결되지 않았습니다.");
+            //Debug.LogWarning("Slider가 연결되지 않았습니다.");
             return;
         }
 
@@ -168,12 +210,12 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
             if (cameraController != null)
             {
                 cameraController.Call("setLinearZoom", zoomValue);
-                Debug.Log($"Linear Zoom 값 전송: {zoomValue}");
+                //Debug.Log($"Linear Zoom 값 전송: {zoomValue}");
             }
         }
         else
         {
-            Debug.Log("Android 플랫폼이 아닙니다.");
+            //Debug.Log("Android 플랫폼이 아닙니다.");
         }
     }
 
@@ -184,12 +226,12 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
             if (cameraController != null)
             {
                 cameraController.Call("setZoomRatio", ratio);
-                Debug.Log($"Zoom Ratio 값 전송: {ratio}");
+                //Debug.Log($"Zoom Ratio 값 전송: {ratio}");
             }
         }
         else
         {
-            Debug.Log("Android 플랫폼이 아닙니다.");
+            //Debug.Log("Android 플랫폼이 아닙니다.");
         }
     }
 
@@ -201,7 +243,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
             cameraController.Dispose();
             cameraController = null;
 
-            Debug.Log("CameraX 종료: 카메라 권한을 반환합니다.");
+            //Debug.Log("CameraX 종료: 카메라 권한을 반환합니다.");
         }
 
         if (cameraTexture != null)
