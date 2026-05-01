@@ -51,7 +51,8 @@ public class RunYOLO : MonoBehaviour
 
     List<GameObject> boxPool = new List<GameObject>();
 
-    private Texture2D maskTexture;
+    [Tooltip("Drag the PolygonOverlayRenderer component here")]
+    [SerializeField] private PolygonOverlayRenderer polygonRenderer;
 
     [Tooltip("Intersection over union threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
@@ -81,19 +82,6 @@ public class RunYOLO : MonoBehaviour
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
         inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
 
-        maskTexture = new Texture2D(maskResolution, maskResolution, TextureFormat.RGBA32, false);
-
-        GameObject maskObj = new GameObject("MaskOverlay");
-        maskObj.transform.SetParent(displayImage.transform, false);
-        var maskRect = maskObj.AddComponent<RectTransform>();
-        maskRect.anchorMin = Vector2.zero;
-        maskRect.anchorMax = Vector2.one;
-        maskRect.offsetMin = Vector2.zero;
-        maskRect.offsetMax = Vector2.zero;
-        var maskRawImage = maskObj.AddComponent<RawImage>();
-        maskRawImage.texture = maskTexture;
-        maskRawImage.raycastTarget = false;
-
         displayLocation = displayImage.transform;
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
 
@@ -111,15 +99,16 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
-        if (maskTexture != null) { Destroy(maskTexture); maskTexture = null; }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
     {
+        // 이전 프레임에서 그려진 박스 제거
         ClearAnnotations();
 
         if (sourceTexture == null) yield break;
 
+        // UV 좌표의 Y축을 반전시켜 텍스처를 상하로 뒤집어 targetRT에 복사
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
@@ -128,6 +117,7 @@ public class RunYOLO : MonoBehaviour
         var output0 = worker.PeekOutput("output0") as Tensor<float>;
         var output1 = worker.PeekOutput("output1") as Tensor<float>;
 
+        // BackendType이 GPU일 경우, GPU->CPU로 결과 복사 
         output0.ReadbackRequest();
         output1.ReadbackRequest();
 
@@ -152,8 +142,6 @@ public class RunYOLO : MonoBehaviour
         var resultBoxes = new NativeList<BoxData>(Allocator.TempJob);
         // NMS 통과 박스별 32개 가중치를 순서대로 저장 (b번째 박스 → [b*32 .. b*32+31])
         var resultWeights = new NativeList<float>(Allocator.TempJob);
-        // NativeArray<Color32>는 생성 시 (0,0,0,0) 투명으로 초기화되므로 별도 clear 불필요
-        var maskPixels = new NativeArray<Color32>(maskResolution * maskResolution, Allocator.TempJob);
 
         try
         {
@@ -171,20 +159,51 @@ public class RunYOLO : MonoBehaviour
             };
             nmsJob.Schedule().Complete();
 
-            var maskJob = new MaskGenerationJob
-            {
-                prototypes = outputData1,
-                boxes = resultBoxes.AsArray(),
-                maskWeights = resultWeights.AsArray(),
-                maskPixels = maskPixels,
-                maskRes = maskResolution,
-                imgRes = imageWidth,
-                numMaskWeights = numMaskWeights
-            };
-            maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
+            polygonRenderer.ClearAll();
 
-            maskTexture.SetPixelData(maskPixels, 0);
-            maskTexture.Apply();
+            int numBoxes = math.min(resultBoxes.Length, 200);
+            if (numBoxes > 0)
+            {
+                // 객체 수 × maskRes² 크기의 per-object binary mask 배열 (0=배경, 1=전경)
+                var perObjectMasks = new NativeArray<byte>(numBoxes * maskResolution * maskResolution, Allocator.TempJob);
+                try
+                {
+                    var maskJob = new MaskGenerationJob
+                    {
+                        prototypes    = outputData1,
+                        boxes         = resultBoxes.AsArray().GetSubArray(0, numBoxes),
+                        maskWeights   = resultWeights.AsArray().GetSubArray(0, numBoxes * numMaskWeights),
+                        perObjectMasks = perObjectMasks,
+                        maskRes       = maskResolution,
+                        imgRes        = imageWidth,
+                        numMaskWeights = numMaskWeights
+                    };
+                    maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
+
+                    for (int i = 0; i < numBoxes; i++)
+                    {
+                        var contourPoints = MarchingSquaresUtil.GetContour(perObjectMasks, maskResolution, i);
+                        if (contourPoints.Count < 3) continue;
+
+                        // mask 좌표 → UILineRenderer scale=true 기준 정규화 좌표 [0,1]
+                        // normY: Y축 반전 (maskY=0이 이미지 상단 → normY=1이 Canvas 상단)
+                        var canvasPoints = new Vector2[contourPoints.Count];
+                        for (int p = 0; p < contourPoints.Count; p++)
+                        {
+                            canvasPoints[p] = new Vector2(
+                                contourPoints[p].x / maskResolution,
+                                1.0f - contourPoints[p].y / maskResolution
+                            );
+                        }
+
+                        polygonRenderer.ShowPolygon(i, canvasPoints, Color.green);
+                    }
+                }
+                finally
+                {
+                    if (perObjectMasks.IsCreated) perObjectMasks.Dispose();
+                }
+            }
 
             ProcessResults(resultBoxes);
         }
@@ -194,7 +213,6 @@ public class RunYOLO : MonoBehaviour
             if (resultWeights.IsCreated) resultWeights.Dispose();
             if (outputData0.IsCreated) outputData0.Dispose();
             if (outputData1.IsCreated) outputData1.Dispose();
-            if (maskPixels.IsCreated) maskPixels.Dispose();
         }
     }
 
@@ -221,6 +239,11 @@ public class RunYOLO : MonoBehaviour
             };
             DrawBox(box, i, displayHeight * 0.05f);
         }
+
+        // RunYOLO.cs의 ProcessResults에서 호출 예시
+        // var results = distanceEstimator.Process(resultBoxes, labels, imageWidth);
+        // foreach (var r in results)
+        //     Debug.Log($"{r.label}: {r.distanceMeters:F1}m");
     }
 
     public void DrawBox(BoundingBox box, int id, float fontSize)
@@ -443,9 +466,10 @@ public struct MaskGenerationJob : IJobParallelFor
     // 각 박스의 마스크 가중치: boxes[b]의 가중치는 maskWeights[b*numMaskWeights .. (b+1)*numMaskWeights-1]
     [ReadOnly] public NativeArray<float> maskWeights;
 
-    // Execute(index)가 texIdx(Y축 반전 적용)에 쓰므로 Unity Safety System 경고 억제 필요
+    // 객체별 binary mask: boxes[b]의 픽셀 (x,y) → perObjectMasks[b*maskRes*maskRes + y*maskRes + x]
+    // 병렬 픽셀 루프 안에서 b축으로도 쓰므로 Safety System 경고 억제 필요
     [NativeDisableParallelForRestriction]
-    public NativeArray<Color32> maskPixels;
+    public NativeArray<byte> perObjectMasks;
 
     public int maskRes;
     public int imgRes;
@@ -461,8 +485,6 @@ public struct MaskGenerationJob : IJobParallelFor
         float scale = (float)imgRes / maskRes;
         float imgX = x * scale;
         float imgY = y * scale;
-
-        bool isMasked = false;
 
         for (int b = 0; b < boxes.Length; b++)
         {
@@ -484,16 +506,9 @@ public struct MaskGenerationJob : IJobParallelFor
 
             if (sigmoid > 0.5f)
             {
-                isMasked = true;
-                break;
+                // Y축 반전 없이 이미지 좌표계 그대로 저장 (Marching Squares에서 사용)
+                perObjectMasks[b * maskRes * maskRes + y * maskRes + x] = 1;
             }
-        }
-
-        if (isMasked)
-        {
-            // Unity 텍스처 좌표계는 아래가 origin이므로 Y축 반전 적용
-            int texIdx = (maskRes - 1 - y) * maskRes + x;
-            maskPixels[texIdx] = new Color32(255, 50, 50, 150);
         }
     }
 }
