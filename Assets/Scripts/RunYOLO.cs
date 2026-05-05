@@ -108,7 +108,6 @@ public class RunYOLO : MonoBehaviour
             Destroy(targetRT);
             targetRT = null;
         }
-        if (maskTexture != null) { Destroy(maskTexture); maskTexture = null; }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
