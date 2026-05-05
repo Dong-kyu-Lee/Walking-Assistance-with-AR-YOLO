@@ -110,6 +110,8 @@ config.json
 # Android Key Data
 user.keystore
 
+# Claude Code
+CLAUDE.md
 # Profiler Data
 ProfileAnalyzer/
 ProfilerCaptures/

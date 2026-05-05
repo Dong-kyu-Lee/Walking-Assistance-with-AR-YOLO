@@ -31,22 +31,22 @@ public class VolumeKeyPlugin {
         public boolean dispatchKeyEvent(KeyEvent event) {
             int code = event.getKeyCode();
             if (code == KeyEvent.KEYCODE_VOLUME_UP) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN)
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
                     volumeUpPressTime = System.currentTimeMillis();
                 else if (event.getAction() == KeyEvent.ACTION_UP) {
                     long held = System.currentTimeMillis() - volumeUpPressTime;
                     UnityPlayer.UnitySendMessage("VolumeKeyReceiver",
-                        held >= LONG_PRESS_MS ? "OnVolumeUpLong" : "OnVolumeUp", "");
+                        (held >= LONG_PRESS_MS) ? "OnVolumeUpLong" : "OnVolumeUp", String.valueOf(held));
                 }
                 return true;
             }
             if (code == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN)
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
                     volumeDownPressTime = System.currentTimeMillis();
                 else if (event.getAction() == KeyEvent.ACTION_UP) {
                     long held = System.currentTimeMillis() - volumeDownPressTime;
                     UnityPlayer.UnitySendMessage("VolumeKeyReceiver",
-                        held >= LONG_PRESS_MS ? "OnVolumeDownLong" : "OnVolumeDown", "");
+                        (held >= LONG_PRESS_MS) ? "OnVolumeDownLong" : "OnVolumeDown", String.valueOf(held));
                 }
                 return true;
             }

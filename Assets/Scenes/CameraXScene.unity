@@ -1006,6 +1006,7 @@ MonoBehaviour:
   font: {fileID: 12800000, guid: 109207b3ec45446afb082067696d36e6, type: 3}
   videoFilename: giraffes.mp4
   isARMode: 0
+  polygonRenderer: {fileID: 794914121}
   iouThreshold: 0.5
   scoreThreshold: 0.5
   detectionOverlayRoot: {fileID: 1124447614}
