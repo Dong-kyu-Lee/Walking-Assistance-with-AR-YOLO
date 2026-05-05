@@ -30,23 +30,26 @@ public class VolumeKeyReceiver : MonoBehaviour
 
     public void OnVolumeUp(string msg)
     {
+        Debug.Log("Time held (ms): " + msg);
         ZoomIn();
     }
 
     public void OnVolumeDown(string msg)
     {
+        Debug.Log("Time held (ms): " + msg);
         ZoomOut();
     }
 
-    // 길게 누르기 → ARScene으로 씬 전환 (시각보조 모드 변경)
     public void OnVolumeUpLong(string msg)
     {
-        SwitchToScene("ARScene");
+        Debug.Log("[볼륨UP 길게]");
+        // SwitchToScene("ARScene");
     }
 
     public void OnVolumeDownLong(string msg)
     {
-        SwitchToScene("MainScene");
+        Debug.Log("[볼륨DOWN 길게]");
+        // SwitchToScene("MainScene");
     }
 
     // ────────────────────────────────────────────
