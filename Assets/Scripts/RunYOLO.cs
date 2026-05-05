@@ -62,6 +62,8 @@ public class RunYOLO : MonoBehaviour
     [SerializeField, Range(0, 1)]
     float scoreThreshold = 0.5f;
 
+    [SerializeField] private RectTransform detectionOverlayRoot;
+
     public struct BoundingBox
     {
         public float centerX;
@@ -99,12 +101,19 @@ public class RunYOLO : MonoBehaviour
     {
         worker?.Dispose();
         inputTensor?.Dispose();
+
+        if (targetRT != null)
+        {
+            targetRT.Release();
+            Destroy(targetRT);
+            targetRT = null;
+        }
+        if (maskTexture != null) { Destroy(maskTexture); maskTexture = null; }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture)
     {
-        // 이전 프레임에서 그려진 박스 제거
-        ClearAnnotations();
+        //ClearAnnotations();
 
         if (sourceTexture == null) yield break;
 
@@ -112,6 +121,7 @@ public class RunYOLO : MonoBehaviour
         Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
+
         worker.Schedule(inputTensor);
 
         var output0 = worker.PeekOutput("output0") as Tensor<float>;
@@ -206,6 +216,7 @@ public class RunYOLO : MonoBehaviour
             }
 
             ProcessResults(resultBoxes);
+
         }
         finally
         {
@@ -218,8 +229,11 @@ public class RunYOLO : MonoBehaviour
 
     private void ProcessResults(NativeList<BoxData> resultBoxes)
     {
-        float displayWidth = displayImage.rectTransform.rect.width;
-        float displayHeight = displayImage.rectTransform.rect.height;
+        RectTransform targetRect = detectionOverlayRoot != null ?
+            detectionOverlayRoot : displayImage.rectTransform;
+
+        float displayWidth = targetRect.rect.width;
+        float displayHeight = targetRect.rect.height;
         float scaleX = displayWidth / (float)imageWidth;
         float scaleY = displayHeight / (float)imageHeight;
 
@@ -240,10 +254,16 @@ public class RunYOLO : MonoBehaviour
             DrawBox(box, i, displayHeight * 0.05f);
         }
 
-        // RunYOLO.cs의 ProcessResults에서 호출 예시
-        // var results = distanceEstimator.Process(resultBoxes, labels, imageWidth);
-        // foreach (var r in results)
-        //     Debug.Log($"{r.label}: {r.distanceMeters:F1}m");
+        HideUnusedBoxes(boxesFound);
+    }
+
+    private void HideUnusedBoxes(int usedCount)
+    {
+        for (int i = usedCount; i < boxPool.Count; i++)
+        {
+            if (boxPool[i].activeSelf)
+                boxPool[i].SetActive(false);
+        }
     }
 
     public void DrawBox(BoundingBox box, int id, float fontSize)

@@ -112,3 +112,6 @@ user.keystore
 
 # Claude Code
 CLAUDE.md
+# Profiler Data
+ProfileAnalyzer/
+ProfilerCaptures/
