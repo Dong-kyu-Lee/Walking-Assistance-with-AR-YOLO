@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 /// <summary>
 /// Marching Squares 알고리즘으로 binary mask에서 윤곽선 폴리곤 포인트를 추출하는 유틸리티.
