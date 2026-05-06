@@ -10,4 +10,9 @@ public static class CameraFeedShaderIds
     public static readonly int ViewScale = Shader.PropertyToID("_ViewScale");
     public static readonly int ViewCenter = Shader.PropertyToID("_ViewCenter");
     public static readonly int BackgroundColor = Shader.PropertyToID("_BackgroundColor");
+
+    public static readonly int Contrast = Shader.PropertyToID("_Contrast");
+    public static readonly int Brightness = Shader.PropertyToID("_Brightness");
+    public static readonly int Saturation = Shader.PropertyToID("_Saturation");
+    public static readonly int GrayscaleAmount = Shader.PropertyToID("_GrayscaleAmount");
 }
