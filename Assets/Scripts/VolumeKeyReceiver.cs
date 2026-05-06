@@ -48,57 +48,26 @@ public class VolumeKeyReceiver : MonoBehaviour
 
     public void OnVolumeUp(string msg)
     {
-        //SetHighContrastMode();
-        EnlargeScreenSize();
-        /*switch(currentSettingType)
-        {
-            case SettingType.Zoom:
-                ZoomIn();
-                break;
-            case SettingType.ScreenSize:
-                EnlargeScreenSize();
-                break;
-            case SettingType.HighContrast:
-                // High contrast adjustment logic here
-                break;
-            case SettingType.Outline:
-                // Outline adjustment logic here
-                break;
-        }*/
+        Debug.Log("Time held (ms): " + msg);
+        ZoomIn();
     }
 
     public void OnVolumeDown(string msg)
     {
-        //SetLowContrastMode();
-        ReduceScreenSize();
-        /*switch(currentSettingType)
-        {
-            case SettingType.Zoom:
-                ZoomOut();
-                break;
-            case SettingType.ScreenSize:
-                ReduceScreenSize();
-                break;
-            case SettingType.HighContrast:
-                // High contrast adjustment logic here
-                break;
-            case SettingType.Outline:
-                // Outline adjustment logic here
-                break;
-        }*/
+        Debug.Log("Time held (ms): " + msg);
+        ZoomOut();
     }
 
-    // 길게 누르기 → ARScene으로 씬 전환 (시각보조 모드 변경)
     public void OnVolumeUpLong(string msg)
     {
-        currentSettingType = (SettingType)(((int)currentSettingType + 1) % System.Enum.GetValues(typeof(SettingType)).Length);
-        currentSettingTypeText.text = currentSettingType.ToString();
+        Debug.Log("[볼륨UP 길게]");
+        // SwitchToScene("ARScene");
     }
 
     public void OnVolumeDownLong(string msg)
     {
-        currentSettingType = (SettingType)(((int)currentSettingType - 1 + System.Enum.GetValues(typeof(SettingType)).Length) % System.Enum.GetValues(typeof(SettingType)).Length);
-        currentSettingTypeText.text = currentSettingType.ToString();
+        Debug.Log("[볼륨DOWN 길게]");
+        // SwitchToScene("MainScene");
     }
 
     // ────────────────────────────────────────────

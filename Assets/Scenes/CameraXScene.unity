@@ -1144,6 +1144,7 @@ MonoBehaviour:
   font: {fileID: 12800000, guid: 109207b3ec45446afb082067696d36e6, type: 3}
   videoFilename: giraffes.mp4
   isARMode: 0
+  polygonRenderer: {fileID: 0}
   iouThreshold: 0.5
   scoreThreshold: 0.5
   detectionOverlayRoot: {fileID: 1124447614}
@@ -1193,6 +1194,20 @@ MonoBehaviour:
   saturation: 1
   grayscaleAmount: 0
   detectionOverlayRoot: {fileID: 1124447614}
+--- !u!114 &794914123
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 794914117}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de13e2c246c4ddf42afd309cff6abd76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PolygonOverlayRenderer
+  displayImage: {fileID: 1124447615}
+  lineThickness: 3
 --- !u!1 &881341273
 GameObject:
   m_ObjectHideFlags: 0
