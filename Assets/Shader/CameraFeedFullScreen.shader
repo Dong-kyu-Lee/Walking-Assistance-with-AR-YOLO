@@ -33,6 +33,11 @@ Shader "Hidden/CameraFeed/FullScreen"
             float2 _ViewCenter;
             float4 _BackgroundColor;
 
+            float _Contrast;
+            float _Brightness;
+            float _Saturation;
+            float _GrayscaleAmount;
+
             half4 Frag(Varyings input) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -55,7 +60,25 @@ Shader "Hidden/CameraFeed/FullScreen"
 
                 localUV = localUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
 
-                return SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
+                half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
+                // 밝기 조절
+                color.rgb += _Brightness;
+
+                // 대비 조절
+                color.rgb = (color.rgb - 0.5) * _Contrast + 0.5;
+
+                // 명암 계산
+                float gray = dot(color.rgb, float3(0.299, 0.587, 0.114));
+
+                // 채도 조절
+                color.rgb = lerp(gray.xxx, color.rgb, _Saturation);
+
+                // 흑백 정도 조절
+                color.rgb = lerp(color.rgb, gray.xxx, _GrayscaleAmount);
+
+                color.rgb = saturate(color.rgb);
+
+                return color;
             }
 
             ENDHLSL

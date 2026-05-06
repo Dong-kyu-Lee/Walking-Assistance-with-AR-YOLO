@@ -1,5 +1,14 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using TMPro;
+
+public enum SettingType
+{
+    Zoom,
+    ScreenSize,
+    HighContrast,
+    Outline
+}
 
 public class VolumeKeyReceiver : MonoBehaviour
 {
@@ -9,12 +18,21 @@ public class VolumeKeyReceiver : MonoBehaviour
     [SerializeField] float minZoomRatio = 0.6f;
     [SerializeField] float maxZoomRatio = 5.0f;
 
+    [Header("시각보조 옵션")]
+    [SerializeField] CameraFeedViewModeController cameraFeedViewModeController;
+
+    [Header("디버그용 Text")]
+    [SerializeField] private TextMeshProUGUI currentSettingTypeText;
+
     private float currentZoomRatio = 1.0f;
+    private SettingType currentSettingType = SettingType.Zoom;
 
     void Start()
     {
         if (cameraX == null)
             cameraX = FindFirstObjectByType<CameraXYOLOInput>();
+
+        currentSettingTypeText.text = "Screen Size";
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         // Window.Callback 방식으로 볼륨 키 가로채기 초기화
@@ -30,23 +48,57 @@ public class VolumeKeyReceiver : MonoBehaviour
 
     public void OnVolumeUp(string msg)
     {
-        ZoomIn();
+        //SetHighContrastMode();
+        EnlargeScreenSize();
+        /*switch(currentSettingType)
+        {
+            case SettingType.Zoom:
+                ZoomIn();
+                break;
+            case SettingType.ScreenSize:
+                EnlargeScreenSize();
+                break;
+            case SettingType.HighContrast:
+                // High contrast adjustment logic here
+                break;
+            case SettingType.Outline:
+                // Outline adjustment logic here
+                break;
+        }*/
     }
 
     public void OnVolumeDown(string msg)
     {
-        ZoomOut();
+        //SetLowContrastMode();
+        ReduceScreenSize();
+        /*switch(currentSettingType)
+        {
+            case SettingType.Zoom:
+                ZoomOut();
+                break;
+            case SettingType.ScreenSize:
+                ReduceScreenSize();
+                break;
+            case SettingType.HighContrast:
+                // High contrast adjustment logic here
+                break;
+            case SettingType.Outline:
+                // Outline adjustment logic here
+                break;
+        }*/
     }
 
     // 길게 누르기 → ARScene으로 씬 전환 (시각보조 모드 변경)
     public void OnVolumeUpLong(string msg)
     {
-        SwitchToScene("ARScene");
+        currentSettingType = (SettingType)(((int)currentSettingType + 1) % System.Enum.GetValues(typeof(SettingType)).Length);
+        currentSettingTypeText.text = currentSettingType.ToString();
     }
 
     public void OnVolumeDownLong(string msg)
     {
-        SwitchToScene("MainScene");
+        currentSettingType = (SettingType)(((int)currentSettingType - 1 + System.Enum.GetValues(typeof(SettingType)).Length) % System.Enum.GetValues(typeof(SettingType)).Length);
+        currentSettingTypeText.text = currentSettingType.ToString();
     }
 
     // ────────────────────────────────────────────
@@ -81,9 +133,25 @@ public class VolumeKeyReceiver : MonoBehaviour
         Debug.Log($"[볼륨DOWN] 줌아웃 → ZoomRatio: {currentZoomRatio}");
     }
 
-    private void SwitchToScene(string targetScene)
+    // 화면 Scale 감소 메소드
+    private void ReduceScreenSize()
     {
-        Debug.Log($"[볼륨 길게] → {targetScene} 씬 전환");
-        SceneManager.LoadScene(targetScene);
+        cameraFeedViewModeController.SetScreenSize(true);
+    }
+
+    // 화면 Scale 증가 메소드
+    private void EnlargeScreenSize()
+    {
+        cameraFeedViewModeController.SetScreenSize(false);
+    } 
+
+    private void SetHighContrastMode()
+    {
+        cameraFeedViewModeController.SetHighContrast(true);
+    }
+
+    private void SetLowContrastMode()
+    {
+        cameraFeedViewModeController.SetHighContrast(false);
     }
 }
