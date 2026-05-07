@@ -1207,8 +1207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de13e2c246c4ddf42afd309cff6abd76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PolygonOverlayRenderer
-  displayImage: {fileID: 1124447615}
-  lineThickness: 3
+  lineMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
 --- !u!1 &881341273
 GameObject:
   m_ObjectHideFlags: 0
