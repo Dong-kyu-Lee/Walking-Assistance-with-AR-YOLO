@@ -321,18 +321,10 @@ public class RunYOLO : MonoBehaviour
     }
 
     [SerializeField] private AndroidTTS androidTTS;
-    [SerializeField] private float speakCooldown = 2.0f;
 
-    private float lastSpeakTime = -999f;
-
-    public void OnObstacleDetected(string className)
+    public void GetObstacleDetectedVoice(string className)
     {
-        if (Time.time - lastSpeakTime < speakCooldown)
-            return;
-
-        lastSpeakTime = Time.time;
-
-        androidTTS.Speak(className + " 장애물이 감지되었습니다.");
+        androidTTS.Speak($"{className} 장애물이 감지되었습니다.");
     }
 }
 

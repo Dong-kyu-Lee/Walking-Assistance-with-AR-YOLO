@@ -15,6 +15,10 @@ public class AndroidTTS : MonoBehaviour
 
     private const string TTS_CLASS_NAME = "android.speech.tts.TextToSpeech";
 
+    [SerializeField] private float speakCooldown = 2.0f;
+
+    private float lastSpeakTime = -999f;
+
     private void Start()
     {
         InitTTS();
@@ -107,6 +111,10 @@ public class AndroidTTS : MonoBehaviour
 
     public void Speak(string text)
     {
+        if (Time.time - lastSpeakTime < speakCooldown)
+            return;
+
+        lastSpeakTime = Time.time;
         Speak(text, true);
     }
 
@@ -130,7 +138,7 @@ public class AndroidTTS : MonoBehaviour
 
             using (AndroidJavaObject bundle = new AndroidJavaObject("android.os.Bundle"))
             {
-                string utteranceId = "tts_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                string utteranceId = $"tts_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
 
                 int result = tts.Call<int>(
                     "speak",
@@ -178,6 +186,10 @@ public class AndroidTTS : MonoBehaviour
             tts.Call("shutdown");
             tts.Dispose();
             tts = null;
+            activity?.Dispose();
+            activity = null;
+            ttsClass?.Dispose();
+            ttsClass = null;
             isReady = false;
         }));
 #endif
