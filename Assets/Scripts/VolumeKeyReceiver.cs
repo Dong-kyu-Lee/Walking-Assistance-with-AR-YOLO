@@ -63,7 +63,7 @@ public class VolumeKeyReceiver : MonoBehaviour
         Debug.Log("[볼륨UP 길게]");
         // SwitchToScene("ARScene");
         currentSettingType = GetNextSettingType(currentSettingType);
-        currentSettingTypeText.text = currentSettingType.ToString();
+        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
     }
 
     public void OnVolumeDownLong(string msg)
@@ -71,7 +71,7 @@ public class VolumeKeyReceiver : MonoBehaviour
         Debug.Log("[볼륨DOWN 길게]");
         // SwitchToScene("MainScene");
         currentSettingType = GetBeforeSettingType(currentSettingType);
-        currentSettingTypeText.text = currentSettingType.ToString();
+        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
     }
 
     // ────────────────────────────────────────────
@@ -159,13 +159,13 @@ public class VolumeKeyReceiver : MonoBehaviour
                 ZoomIn();
                 break;
             case SettingType.ScreenSize:
-                ReduceScreenSize();
+                EnlargeScreenSize();
                 break;
             case SettingType.HighContrast:
                 SetHighContrastMode();
                 break;
             case SettingType.Outline:
-                // SetOutlineMode(); // 윤곽선 모드 설정 메소드 호출
+                cameraX.SetOulineMode();
                 break;
         }
     }
@@ -178,14 +178,26 @@ public class VolumeKeyReceiver : MonoBehaviour
                 ZoomOut();
                 break;
             case SettingType.ScreenSize:
-                EnlargeScreenSize();
+                ReduceScreenSize();
                 break;
             case SettingType.HighContrast:
                 SetLowContrastMode();
                 break;
             case SettingType.Outline:
-                // SetOutlineMode(); // 윤곽선 모드 설정 메소드 호출
+                cameraX.SetOulineMode();
                 break;
         }
+    }
+
+    private string GetCurrentModeName(SettingType type)
+    {
+        return type switch
+        {
+            SettingType.Zoom => "Zoom",
+            SettingType.ScreenSize => "Screen Size",
+            SettingType.HighContrast => "High Contrast",
+            SettingType.Outline => "Outline",
+            _ => "Unknown"
+        };
     }
 }
