@@ -64,6 +64,7 @@ public class VolumeKeyReceiver : MonoBehaviour
         // SwitchToScene("ARScene");
         currentSettingType = GetNextSettingType(currentSettingType);
         currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
+        GetVoice(GetCurrentModeName(currentSettingType));
     }
 
     public void OnVolumeDownLong(string msg)
@@ -72,6 +73,7 @@ public class VolumeKeyReceiver : MonoBehaviour
         // SwitchToScene("MainScene");
         currentSettingType = GetBeforeSettingType(currentSettingType);
         currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
+        GetVoice(GetCurrentModeName(currentSettingType));
     }
 
     // ────────────────────────────────────────────
@@ -199,5 +201,12 @@ public class VolumeKeyReceiver : MonoBehaviour
             SettingType.Outline => "Outline",
             _ => "Unknown"
         };
+    }
+    
+    [SerializeField] private AndroidTTS androidTTS;
+
+    public void GetVoice(string sentence)
+    {
+        androidTTS.Speak(sentence, true);
     }
 }
