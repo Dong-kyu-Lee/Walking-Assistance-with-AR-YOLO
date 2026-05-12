@@ -1,0 +1,24 @@
+tree_zone
+repair_zone(?)
+curb : 연석
+person
+car
+bus
+truck
+motorcycle
+bicycle
+wheelchair
+stroller
+bollard
+pole
+traffic_light
+traffic_sign
+movable_signage
+kiosk
+fire_hydrant
+bench
+chair
+table
+trash_can
+dog
+carrier
