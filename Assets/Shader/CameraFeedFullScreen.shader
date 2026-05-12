@@ -26,6 +26,10 @@ Shader "Hidden/CameraFeed/FullScreen"
 
             TEXTURE2D(_CameraFeedTex);
             SAMPLER(sampler_CameraFeedTex);
+            
+            TEXTURE2D(_PolygonOverlayTex); // í…ìŠ¤ì²˜ ë°ì´í„° ìžì²´ë¥¼ ë°›ëŠ” ìŠ¬ë¡¯
+            SAMPLER(sampler_PolygonOverlayTex); // í…ìŠ¤ì²˜ë¥¼ ì½ì„ ë•Œ ì“¸ í•„í„°/ëž˜í•‘ ì„¤ì •
+            float _PolygonOverlayAvailable; // í´ë¦¬ê³¤ì´ ì‹¤ì œë¡œ ê·¸ë ¤ì ¸ ìžˆëŠ”ì§€ ì—¬ë¶€
 
             float4 _CameraFeed_ST;
 
@@ -61,22 +65,27 @@ Shader "Hidden/CameraFeed/FullScreen"
                 localUV = localUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
 
                 half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
-                // ¹à±â Á¶Àý
+                // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                 color.rgb += _Brightness;
 
-                // ´ëºñ Á¶Àý
+                // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                 color.rgb = (color.rgb - 0.5) * _Contrast + 0.5;
 
-                // ¸í¾Ï °è»ê
+                // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
                 float gray = dot(color.rgb, float3(0.299, 0.587, 0.114));
 
-                // Ã¤µµ Á¶Àý
+                // Ã¤ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                 color.rgb = lerp(gray.xxx, color.rgb, _Saturation);
 
-                // Èæ¹é Á¤µµ Á¶Àý
+                // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                 color.rgb = lerp(color.rgb, gray.xxx, _GrayscaleAmount);
 
                 color.rgb = saturate(color.rgb);
+                // ì¹´ë©”ë¼ í”¼ë“œì™€ í´ë¦¬ê³¤ ì˜¤ë²„ë ˆì´ í…ìŠ¤ì²˜ë¥¼ ë™ì¼í•œ UV ì¢Œí‘œë¡œ ìƒ˜í”Œë§
+                if (_PolygonOverlayAvailable > 0.5) {
+                    half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, localUV);
+                    color.rgb = lerp(color.rgb, poly.rgb, poly.a);
+                }
 
                 return color;
             }

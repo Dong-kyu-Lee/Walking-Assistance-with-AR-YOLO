@@ -52,7 +52,7 @@ public class RunYOLO : MonoBehaviour
     List<GameObject> boxPool = new List<GameObject>();
 
     [Tooltip("Drag the PolygonOverlayRenderer component here")]
-    [SerializeField] private PolygonOverlayRenderer polygonRenderer;
+    [SerializeField] private PolygonOverlayTextureRenderer polygonRenderer;
 
     [Tooltip("Intersection over union threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
