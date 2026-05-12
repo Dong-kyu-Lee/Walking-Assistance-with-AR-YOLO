@@ -7,6 +7,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 {
     [Header("YOLO Reference")]
     public RunYOLO yoloProcessor;
+    public bool IsOutlineMode { get; private set; }
 
     [Header("Permission")]
     [SerializeField] private CameraPermissionRequester permissionRequester;
@@ -115,6 +116,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
         //UpdateCameraFeed();
 
+        if (IsOutlineMode == false) return;
         if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
         {
             inferenceTimer += Time.deltaTime;
@@ -250,6 +252,16 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         {
             Destroy(cameraTexture);
             cameraTexture = null;
+        }
+    }
+
+    public void SetOulineMode()
+    {
+        IsOutlineMode = !IsOutlineMode;
+
+        if (IsOutlineMode == false)
+        {
+            yoloProcessor.ClearAnnotations();
         }
     }
 }

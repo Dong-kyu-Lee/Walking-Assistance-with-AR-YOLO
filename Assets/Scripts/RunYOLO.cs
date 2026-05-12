@@ -319,6 +319,13 @@ public class RunYOLO : MonoBehaviour
     {
         foreach (var box in boxPool) box.SetActive(false);
     }
+
+    [SerializeField] private AndroidTTS androidTTS;
+
+    public void GetObstacleDetectedVoice(string className)
+    {
+        androidTTS.Speak($"{className} 장애물이 감지되었습니다.");
+    }
 }
 
 public struct BoxData

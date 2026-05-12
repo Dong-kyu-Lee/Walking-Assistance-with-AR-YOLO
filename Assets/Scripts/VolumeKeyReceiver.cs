@@ -49,25 +49,31 @@ public class VolumeKeyReceiver : MonoBehaviour
     public void OnVolumeUp(string msg)
     {
         Debug.Log("Time held (ms): " + msg);
-        ZoomIn();
+        ExecutionVolumeUpMode();
     }
 
     public void OnVolumeDown(string msg)
     {
         Debug.Log("Time held (ms): " + msg);
-        ZoomOut();
+        ExecutionVolumeDownMode();
     }
 
     public void OnVolumeUpLong(string msg)
     {
         Debug.Log("[볼륨UP 길게]");
         // SwitchToScene("ARScene");
+        currentSettingType = GetNextSettingType(currentSettingType);
+        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
+        GetVoice(GetCurrentModeName(currentSettingType));
     }
 
     public void OnVolumeDownLong(string msg)
     {
         Debug.Log("[볼륨DOWN 길게]");
         // SwitchToScene("MainScene");
+        currentSettingType = GetBeforeSettingType(currentSettingType);
+        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
+        GetVoice(GetCurrentModeName(currentSettingType));
     }
 
     // ────────────────────────────────────────────
@@ -122,5 +128,85 @@ public class VolumeKeyReceiver : MonoBehaviour
     private void SetLowContrastMode()
     {
         cameraFeedViewModeController.SetHighContrast(false);
+    }
+
+    private SettingType GetNextSettingType(SettingType type)
+    {
+        return type switch
+        {
+            SettingType.Zoom => SettingType.ScreenSize,
+            SettingType.ScreenSize => SettingType.HighContrast,
+            SettingType.HighContrast => SettingType.Outline,
+            SettingType.Outline => SettingType.Zoom,
+            _ => SettingType.Zoom
+        };
+    }
+    private SettingType GetBeforeSettingType(SettingType type)
+    {
+        return type switch
+        {
+            SettingType.Zoom => SettingType.Outline,
+            SettingType.ScreenSize => SettingType.Zoom,
+            SettingType.HighContrast => SettingType.ScreenSize,
+            SettingType.Outline => SettingType.HighContrast,
+            _ => SettingType.Zoom
+        };
+    }
+
+    private void ExecutionVolumeUpMode()
+    {
+        switch (currentSettingType)
+        {
+            case SettingType.Zoom:
+                ZoomIn();
+                break;
+            case SettingType.ScreenSize:
+                EnlargeScreenSize();
+                break;
+            case SettingType.HighContrast:
+                SetHighContrastMode();
+                break;
+            case SettingType.Outline:
+                cameraX.SetOulineMode();
+                break;
+        }
+    }
+
+    private void ExecutionVolumeDownMode()
+    {
+        switch (currentSettingType)
+        {
+            case SettingType.Zoom:
+                ZoomOut();
+                break;
+            case SettingType.ScreenSize:
+                ReduceScreenSize();
+                break;
+            case SettingType.HighContrast:
+                SetLowContrastMode();
+                break;
+            case SettingType.Outline:
+                cameraX.SetOulineMode();
+                break;
+        }
+    }
+
+    private string GetCurrentModeName(SettingType type)
+    {
+        return type switch
+        {
+            SettingType.Zoom => "Zoom",
+            SettingType.ScreenSize => "Screen Size",
+            SettingType.HighContrast => "High Contrast",
+            SettingType.Outline => "Outline",
+            _ => "Unknown"
+        };
+    }
+    
+    [SerializeField] private AndroidTTS androidTTS;
+
+    public void GetVoice(string sentence)
+    {
+        androidTTS.Speak(sentence, true);
     }
 }
