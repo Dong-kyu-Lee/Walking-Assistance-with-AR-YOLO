@@ -106,6 +106,8 @@ public class DistanceEstimator : MonoBehaviour
                 ? labels[box.classID]
                 : "Unknown";
 
+            Debug.Log("box label : " + label + " box w : " + box.w + " box h : " + box.h);
+
             float distance = -1f;
             bool measured = false;
 
@@ -138,4 +140,9 @@ public class DistanceEstimator : MonoBehaviour
     /// 가장 최근에 계산된 탐지+거리 결과를 반환한다.
     /// </summary>
     public IReadOnlyList<DetectionResult> GetLastResults() => _results;
+
+    /// <summary>
+    /// 결과 리스트를 비워 이미 출력된 결과가 재출력되지 않도록 한다.
+    /// </summary>
+    public void ClearResults() => _results.Clear();
 }

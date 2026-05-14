@@ -64,6 +64,9 @@ public class RunYOLO : MonoBehaviour
 
     [SerializeField] private RectTransform detectionOverlayRoot;
 
+    [Tooltip("Drag the DistanceEstimator component here")]
+    [SerializeField] private DistanceEstimator distanceEstimator;
+
     public struct BoundingBox
     {
         public float centerX;
@@ -78,7 +81,7 @@ public class RunYOLO : MonoBehaviour
         Application.targetFrameRate = 60;
         if (!isARMode) Screen.orientation = ScreenOrientation.LandscapeLeft;
 
-        labels = classesAsset.text.Split('\n');
+        labels = classesAsset.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         LoadModel();
 
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
@@ -168,6 +171,12 @@ public class RunYOLO : MonoBehaviour
             };
             nmsJob.Schedule().Complete();
 
+            if (distanceEstimator != null)
+            {
+                Debug.Log("거리 정보 처리 시작");
+                distanceEstimator.Process(resultBoxes, labels, imageWidth);
+            }
+
             polygonRenderer.ClearAll();
 
             int numBoxes = math.min(resultBoxes.Length, 200);
@@ -214,8 +223,7 @@ public class RunYOLO : MonoBehaviour
                 }
             }
 
-            ProcessResults(resultBoxes);
-
+            // ProcessResults(resultBoxes); (바운딩박스는 출력 제외, 데이터는 가져옴)
         }
         finally
         {
