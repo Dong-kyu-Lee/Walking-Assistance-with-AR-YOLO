@@ -27,9 +27,8 @@ public class DistanceEstimator : MonoBehaviour
     {
         { "person",     0.50f },
         { "dog",        0.40f },
-        { "cat",        0.30f },
         { "chair",      0.50f },
-        { "bottle",     0.08f },
+        { "fire_hydrant", 0.60f },
     };
 
     // 높이 기준 클래스 → 실제 높이(m)
@@ -39,10 +38,12 @@ public class DistanceEstimator : MonoBehaviour
     {
         { "car",        1.50f },
         { "truck",      3.00f },
-        { "bus",        3.00f },
+        { "bus",        3.30f },
         { "bicycle",    0.60f },
         { "motorcycle", 0.80f },
         { "bench",      0.80f },
+        { "trash_can",  1.10f },
+        { "bollard",    0.90f },
     };
 
     // Camera.main으로 화각을 얻지 못할 때 사용하는 fallback 값 (도 단위)
