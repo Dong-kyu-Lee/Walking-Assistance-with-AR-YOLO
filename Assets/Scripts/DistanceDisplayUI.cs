@@ -11,7 +11,7 @@ using UnityEngine.UI;
 public class DistanceDisplayUI : MonoBehaviour
 {
     [SerializeField] private GroundPlaneDistanceEstimator groundPlaneDistanceEstimator;
-    [SerializeField] private TextMeshProUGUI distanceText;
+    // [SerializeField] private TextMeshProUGUI distanceText;
     [SerializeField] private AndroidTTS androidTTS;
 
     [Tooltip("거리 정보 갱신 주기 (초)")]
@@ -86,7 +86,7 @@ public class DistanceDisplayUI : MonoBehaviour
     private float tmpDistance = 1.23f;
     private void Start()
     {
-        distanceText.text = $"{tmpName}<color=green>이 </color>{tmpDistance:F1}<color=green>m 앞에 있습니다.</color>";
+        // distanceText.text = $"{tmpName}<color=green>이 </color>{tmpDistance:F1}<color=green>m 앞에 있습니다.</color>";
     }
 
     private void Update()
@@ -116,21 +116,21 @@ public class DistanceDisplayUI : MonoBehaviour
 
         if (results.Count == 0)
         {
-            distanceText.text = string.Empty;
+            // distanceText.text = string.Empty;
             return;
         }
 
-        distanceText.text = string.Empty;
-        bool first = true;
+        // distanceText.text = string.Empty;
+        // bool first = true;
         GroundPlaneDistanceEstimator.DetectionResult nearest = default;
         float nearestDist = float.MaxValue;
 
         foreach (var r in results)
         {
-            if (!first) distanceText.text += "\n";
-            first = false;
+            // if (!first) distanceText.text += "\n";
+            // first = false;
 
-            distanceText.text += $"Label : {r.label}\nDistance : {r.distanceMeters:F1} m\n";
+            // distanceText.text += $"Label : {r.label}\nDistance : {r.distanceMeters:F1} m\n";
             Debug.Log($"Label : {r.label} , Distance : {r.distanceMeters:F1} m");
 
             if (r.isMeasured && r.distanceMeters > 0f && r.distanceMeters < nearestDist)
