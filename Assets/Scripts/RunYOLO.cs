@@ -64,8 +64,13 @@ public class RunYOLO : MonoBehaviour
 
     [SerializeField] private RectTransform detectionOverlayRoot;
 
-    [Tooltip("Drag the DistanceEstimator component here")]
-    [SerializeField] private DistanceEstimator distanceEstimator;
+    [Tooltip("Drag the GroundPlaneDistanceEstimator component here")]
+    [SerializeField] private GroundPlaneDistanceEstimator groundPlaneDistanceEstimator;
+
+    // 사용자 인지 혼란을 줄이기 위해 중요하지 않은 클래스는 폴리곤 출력 제외
+    private HashSet<string> polygonSkipLabels = new HashSet<string> { "roadway", "bike_lane", "alley", "speed_bump", "ramp" };
+    // 거리 계산에서 제외할 클래스 (거리 계산은 탐지된 객체가 실제로 보행자에게 장애물이 될 때만 의미 있으므로)
+    private HashSet<string> distanceSkipLabels = new HashSet<string> { "roadway", "bike_lane", "alley", "speed_bump", "ramp","traffic_light", "stop_sign" };
 
     public struct BoundingBox
     {
@@ -171,10 +176,10 @@ public class RunYOLO : MonoBehaviour
             };
             nmsJob.Schedule().Complete();
 
-            if (distanceEstimator != null)
+            if (groundPlaneDistanceEstimator != null)
             {
                 Debug.Log("거리 정보 처리 시작");
-                distanceEstimator.Process(resultBoxes, labels, imageWidth);
+                groundPlaneDistanceEstimator.Process(resultBoxes, labels, imageWidth);
             }
 
             polygonRenderer.ClearAll();
@@ -200,6 +205,10 @@ public class RunYOLO : MonoBehaviour
 
                     for (int i = 0; i < numBoxes; i++)
                     {
+                        var b = resultBoxes[i];
+                        string boxLabel = (b.classID >= 0 && b.classID < labels.Length) ? labels[b.classID] : "";
+                        if (polygonSkipLabels.Contains(boxLabel)) continue;
+
                         var contourPoints = MarchingSquaresUtil.GetContour(perObjectMasks, maskResolution, i);
                         if (contourPoints.Count < 3) continue;
 

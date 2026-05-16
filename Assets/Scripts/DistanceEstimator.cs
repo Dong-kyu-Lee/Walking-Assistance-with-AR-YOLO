@@ -44,6 +44,8 @@ public class DistanceEstimator : MonoBehaviour
         { "bench",      0.80f },
         { "trash_can",  1.10f },
         { "bollard",    0.90f },
+        { "wheelchair", 0.85f },
+        { "stroller",   1.10f },
     };
 
     // Camera.main으로 화각을 얻지 못할 때 사용하는 fallback 값 (도 단위)

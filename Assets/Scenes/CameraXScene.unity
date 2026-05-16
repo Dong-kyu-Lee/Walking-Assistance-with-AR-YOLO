@@ -515,6 +515,7 @@ GameObject:
   m_Component:
   - component: {fileID: 208641307}
   - component: {fileID: 208641306}
+  - component: {fileID: 208641308}
   m_Layer: 0
   m_Name: DistanceEstimator
   m_TagString: Untagged
@@ -529,7 +530,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 208641305}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5a436bba5c726ea4bb53579a2d820629, type: 3}
   m_Name: 
@@ -551,6 +552,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &208641308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208641305}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b04e48c4b93d4dd468d0cbd3aa3cc53a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GroundPlaneDistanceEstimator
+  cameraHeightMeters: 1.7
+  useGyro: 1
+  manualPitchDownDegrees: 10
+  fallbackVerticalFovDegrees: 45
 --- !u!1 &349974705
 GameObject:
   m_ObjectHideFlags: 0
@@ -1195,7 +1212,7 @@ MonoBehaviour:
   iouThreshold: 0.5
   scoreThreshold: 0.5
   detectionOverlayRoot: {fileID: 1124447614}
-  distanceEstimator: {fileID: 208641306}
+  groundPlaneDistanceEstimator: {fileID: 208641308}
   androidTTS: {fileID: 1238605812}
 --- !u!114 &794914121
 MonoBehaviour:
@@ -2361,7 +2378,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67079d66b23f56e40b0c6bc9e0021b04, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DistanceDisplayUI
-  distanceEstimator: {fileID: 208641306}
+  groundPlaneDistanceEstimator: {fileID: 208641308}
   distanceText: {fileID: 1999326035}
   updateInterval: 3
 --- !u!1 &1591956417

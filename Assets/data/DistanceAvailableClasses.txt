@@ -1,19 +1,14 @@
-tree_zone
-repair_zone(?)
-curb : 연석
 person`
 car`
 bus`
 truck`
 motorcycle`
 bicycle`
-wheelchair
-stroller
+wheelchair`
+stroller`
 bollard`
 pole
-traffic_light
-traffic_sign
-movable_signage
+movable_signage(입간판)
 kiosk
 fire_hydrant`
 bench`

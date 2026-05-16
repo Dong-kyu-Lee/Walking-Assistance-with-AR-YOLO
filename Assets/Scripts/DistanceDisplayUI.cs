@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// </summary>
 public class DistanceDisplayUI : MonoBehaviour
 {
-    [SerializeField] private DistanceEstimator distanceEstimator;
+    [SerializeField] private GroundPlaneDistanceEstimator groundPlaneDistanceEstimator;
     [SerializeField] private TextMeshProUGUI distanceText;
 
     [Tooltip("거리 정보 갱신 주기 (초)")]
@@ -41,7 +41,7 @@ public class DistanceDisplayUI : MonoBehaviour
         else
         {
             // Idle: 탐지 발생 시 즉시 출력 후 쿨다운 진입
-            if (distanceEstimator.GetLastResults().Count == 0) return;
+            if (groundPlaneDistanceEstimator.GetLastResults().Count == 0) return;
             RefreshText();
             isCoolingDown = true;
             elapsed = 0f;
@@ -50,7 +50,7 @@ public class DistanceDisplayUI : MonoBehaviour
 
     private void RefreshText()
     {
-        IReadOnlyList<DistanceEstimator.DetectionResult> results = distanceEstimator.GetLastResults();
+        IReadOnlyList<DistanceEstimator.DetectionResult> results = groundPlaneDistanceEstimator.GetLastResults();
 
         if (results.Count == 0)
         {
@@ -68,6 +68,6 @@ public class DistanceDisplayUI : MonoBehaviour
             distanceText.text += $"Label : {r.label}\nDistance : {r.distanceMeters:F1} m\n";
             Debug.Log($"Label : {r.label} , Distance : {r.distanceMeters:F1} m");
         }
-        distanceEstimator.ClearResults();
+        groundPlaneDistanceEstimator.ClearResults();
     }
 }
