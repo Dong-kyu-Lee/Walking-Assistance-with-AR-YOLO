@@ -67,10 +67,15 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Drag the GroundPlaneDistanceEstimator component here")]
     [SerializeField] private GroundPlaneDistanceEstimator groundPlaneDistanceEstimator;
 
+    [SerializeField] private AndroidTTS androidTTS;
+
+    [Tooltip("거리 측정된 물체 중 폴리곤을 표시할 최대 개수 (가까운 순)")]
+    [SerializeField] private int nearestPolygonCount = 3;
+
     // 사용자 인지 혼란을 줄이기 위해 중요하지 않은 클래스는 폴리곤 출력 제외
-    private HashSet<string> polygonSkipLabels = new HashSet<string> { "roadway", "bike_lane", "alley", "speed_bump", "ramp" };
-    // 거리 계산에서 제외할 클래스 (거리 계산은 탐지된 객체가 실제로 보행자에게 장애물이 될 때만 의미 있으므로)
-    private HashSet<string> distanceSkipLabels = new HashSet<string> { "roadway", "bike_lane", "alley", "speed_bump", "ramp","traffic_light", "stop_sign" };
+    private HashSet<string> polygonSkipLabels = new HashSet<string> { "sidewalk_normal", "sidewalk_damaged", "roadway", "bike_lane", "alley", "speed_bump", "ramp" };
+    // 거리 여부에 관계 없이 무조건 폴리곤 출력할 클래스 (거리 계산은 탐지된 객체가 실제로 보행자에게 장애물이 될 때만 의미 있으므로)
+    private HashSet<string> distanceSkipLabels = new HashSet<string> { "crosswalk", "stairs", "braille_blocks" };
 
     public struct BoundingBox
     {
@@ -185,6 +190,12 @@ public class RunYOLO : MonoBehaviour
             polygonRenderer.ClearAll();
 
             int numBoxes = math.min(resultBoxes.Length, 200);
+            HashSet<int> polygonShowIndices = BuildPolygonShowSet(
+                resultBoxes,
+                groundPlaneDistanceEstimator != null ? groundPlaneDistanceEstimator.GetLastResults() : null,
+                labels,
+                numBoxes);
+
             if (numBoxes > 0)
             {
                 // 객체 수 × maskRes² 크기의 per-object binary mask 배열 (0=배경, 1=전경)
@@ -205,9 +216,7 @@ public class RunYOLO : MonoBehaviour
 
                     for (int i = 0; i < numBoxes; i++)
                     {
-                        var b = resultBoxes[i];
-                        string boxLabel = (b.classID >= 0 && b.classID < labels.Length) ? labels[b.classID] : "";
-                        if (polygonSkipLabels.Contains(boxLabel)) continue;
+                        if (!polygonShowIndices.Contains(i)) continue;
 
                         var contourPoints = MarchingSquaresUtil.GetContour(perObjectMasks, maskResolution, i);
                         if (contourPoints.Count < 3) continue;
@@ -243,6 +252,7 @@ public class RunYOLO : MonoBehaviour
         }
     }
 
+#region BOX Drawing Code (Unused)
     private void ProcessResults(NativeList<BoxData> resultBoxes)
     {
         RectTransform targetRect = detectionOverlayRoot != null ?
@@ -336,12 +346,58 @@ public class RunYOLO : MonoBehaviour
     {
         foreach (var box in boxPool) box.SetActive(false);
     }
-
-    [SerializeField] private AndroidTTS androidTTS;
+#endregion
 
     public void GetObstacleDetectedVoice(string className)
     {
         androidTTS.Speak($"{className} 장애물이 감지되었습니다.");
+    }
+
+    // 폴리곤을 출력할 박스 인덱스 집합을 반환한다.
+    // - polygonSkipLabels: 항상 제외
+    // - distanceSkipLabels: 거리와 무관하게 항상 포함
+    // - 그 외: 거리 측정 성공한 것 중 nearestPolygonCount개만 포함
+    private HashSet<int> BuildPolygonShowSet(
+        NativeList<BoxData> boxes,
+        IReadOnlyList<DistanceEstimator.DetectionResult> distResults,
+        string[] labels,
+        int numBoxes)
+    {
+        var showSet = new HashSet<int>();
+
+        if (distResults == null)
+        {
+            for (int i = 0; i < numBoxes; i++)
+            {
+                string lbl = (boxes[i].classID >= 0 && boxes[i].classID < labels.Length) ? labels[boxes[i].classID] : "";
+                if (!polygonSkipLabels.Contains(lbl)) showSet.Add(i);
+            }
+            return showSet;
+        }
+
+        var measured = new List<(int idx, float dist)>();
+
+        for (int i = 0; i < numBoxes; i++)
+        {
+            string lbl = (boxes[i].classID >= 0 && boxes[i].classID < labels.Length) ? labels[boxes[i].classID] : "";
+            if (polygonSkipLabels.Contains(lbl)) continue;
+
+            if (distanceSkipLabels.Contains(lbl))
+            {
+                showSet.Add(i);
+            }
+            else if (i < distResults.Count && distResults[i].isMeasured && distResults[i].distanceMeters > 0f)
+            {
+                measured.Add((i, distResults[i].distanceMeters));
+            }
+        }
+
+        measured.Sort((a, b) => a.dist.CompareTo(b.dist));
+        int take = math.min(math.max(nearestPolygonCount, 0), measured.Count);
+        for (int i = 0; i < take; i++)
+            showSet.Add(measured[i].idx);
+
+        return showSet;
     }
 }
 

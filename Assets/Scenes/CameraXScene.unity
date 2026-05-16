@@ -568,6 +568,7 @@ MonoBehaviour:
   useGyro: 1
   manualPitchDownDegrees: 10
   fallbackVerticalFovDegrees: 45
+  accelFilterAlpha: 0.1
 --- !u!1 &349974705
 GameObject:
   m_ObjectHideFlags: 0
@@ -1214,6 +1215,7 @@ MonoBehaviour:
   detectionOverlayRoot: {fileID: 1124447614}
   groundPlaneDistanceEstimator: {fileID: 208641308}
   androidTTS: {fileID: 1238605812}
+  nearestPolygonCount: 3
 --- !u!114 &794914121
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2380,7 +2382,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DistanceDisplayUI
   groundPlaneDistanceEstimator: {fileID: 208641308}
   distanceText: {fileID: 1999326035}
-  updateInterval: 3
+  androidTTS: {fileID: 1238605812}
+  updateInterval: 5
 --- !u!1 &1591956417
 GameObject:
   m_ObjectHideFlags: 0
