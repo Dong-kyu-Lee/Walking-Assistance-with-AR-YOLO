@@ -190,6 +190,7 @@ public class RunYOLO : MonoBehaviour
             polygonRenderer.ClearAll();
 
             int numBoxes = math.min(resultBoxes.Length, 200);
+            // 폴리곤 출력할 박스 인덱스 집합 계산
             HashSet<int> polygonShowIndices = BuildPolygonShowSet(
                 resultBoxes,
                 groundPlaneDistanceEstimator != null ? groundPlaneDistanceEstimator.GetLastResults() : null,
@@ -359,7 +360,7 @@ public class RunYOLO : MonoBehaviour
     // - 그 외: 거리 측정 성공한 것 중 nearestPolygonCount개만 포함
     private HashSet<int> BuildPolygonShowSet(
         NativeList<BoxData> boxes,
-        IReadOnlyList<DistanceEstimator.DetectionResult> distResults,
+        IReadOnlyList<GroundPlaneDistanceEstimator.DetectionResult> distResults,
         string[] labels,
         int numBoxes)
     {

@@ -17,6 +17,9 @@ public class DistanceDisplayUI : MonoBehaviour
     [Tooltip("거리 정보 갱신 주기 (초)")]
     [SerializeField] private float updateInterval = 3f;
 
+    [Tooltip("YOLO 모델 입력 이미지 너비 (픽셀) — 방향 삼등분에 사용")]
+    [SerializeField] private int modelImageWidth = 640;
+
     private float elapsed;
     private bool isCoolingDown;
 
@@ -60,6 +63,15 @@ public class DistanceDisplayUI : MonoBehaviour
         { "carrier",          "캐리어" },
     };
 
+    // cx: 모델 이미지 좌표(0~modelImageWidth). 화면을 삼등분해 방향 반환
+    private string HorizontalDirection(float cx)
+    {
+        float ratio = cx / modelImageWidth;
+        if (ratio < 1f / 3f) return "왼쪽";
+        if (ratio < 2f / 3f) return "앞쪽";
+        return "오른쪽";
+    }
+
     // 마지막 글자의 종성 유무로 '이'/'가' 결정
     private static string SubjectParticle(string word)
     {
@@ -100,7 +112,7 @@ public class DistanceDisplayUI : MonoBehaviour
 
     private void RefreshText()
     {
-        IReadOnlyList<DistanceEstimator.DetectionResult> results = groundPlaneDistanceEstimator.GetLastResults();
+        IReadOnlyList<GroundPlaneDistanceEstimator.DetectionResult> results = groundPlaneDistanceEstimator.GetLastResults();
 
         if (results.Count == 0)
         {
@@ -110,7 +122,7 @@ public class DistanceDisplayUI : MonoBehaviour
 
         distanceText.text = string.Empty;
         bool first = true;
-        DistanceEstimator.DetectionResult nearest = default;
+        GroundPlaneDistanceEstimator.DetectionResult nearest = default;
         float nearestDist = float.MaxValue;
 
         foreach (var r in results)
@@ -132,7 +144,8 @@ public class DistanceDisplayUI : MonoBehaviour
         {
             string korean = LabelKorean.TryGetValue(nearest.label, out string k) ? k : nearest.label;
             string particle = SubjectParticle(korean);
-            androidTTS.Speak($"{korean}{particle} {nearestDist:F1}미터 앞에 있습니다.");
+            string direction = HorizontalDirection(nearest.box.cx);
+            androidTTS.Speak($"{korean}{particle} {nearestDist:F1}미터 {direction}에 있습니다.");
         }
 
         groundPlaneDistanceEstimator.ClearResults();

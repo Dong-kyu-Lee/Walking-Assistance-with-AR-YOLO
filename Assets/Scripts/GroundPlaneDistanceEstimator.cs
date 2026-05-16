@@ -14,6 +14,18 @@ using UnityEngine;
 /// </summary>
 public class GroundPlaneDistanceEstimator : MonoBehaviour
 {
+    public struct DetectionResult
+    {
+        public BoxData box;
+        public string label;
+
+        // 추정 거리(미터). 추정 불가 시 -1
+        public float distanceMeters;
+
+        // 이번 프레임에 실제로 거리를 측정했는지 여부
+        public bool isMeasured;
+    }
+
     [Tooltip("지면으로부터 카메라까지의 높이 (미터)")]
     [SerializeField] private float cameraHeightMeters = 1.7f;
 
@@ -36,7 +48,7 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
 
     public float CurrentPitchDownDegrees { get; private set; }
 
-    private readonly List<DistanceEstimator.DetectionResult> _results = new();
+    private readonly List<GroundPlaneDistanceEstimator.DetectionResult> _results = new();
 
     private void Start()
     {
@@ -51,8 +63,6 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
             UpdatePitchFromAccelerometer();
         else
             CurrentPitchDownDegrees = manualPitchDownDegrees;
-
-        Debug.Log("Current Pitch Down Degrees: " + CurrentPitchDownDegrees);
     }
 
     private void UpdatePitchFromAccelerometer()
@@ -74,7 +84,7 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
     /// <param name="boxes">NMS 통과 박스 목록 (cx, cy, w, h 는 모델 입력 픽셀 단위)</param>
     /// <param name="labels">클래스 레이블 배열</param>
     /// <param name="imageWidth">모델 입력 이미지 너비/높이 (픽셀, 정사각형 입력 가정)</param>
-    public List<DistanceEstimator.DetectionResult> Process(
+    public List<GroundPlaneDistanceEstimator.DetectionResult> Process(
         NativeList<BoxData> boxes, string[] labels, int imageWidth)
     {
         _results.Clear();
@@ -107,7 +117,7 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
                 measured = true;
             }
 
-            _results.Add(new DistanceEstimator.DetectionResult
+            _results.Add(new GroundPlaneDistanceEstimator.DetectionResult
             {
                 box            = box,
                 label          = label,
@@ -119,7 +129,7 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
         return _results;
     }
 
-    public IReadOnlyList<DistanceEstimator.DetectionResult> GetLastResults() => _results;
+    public IReadOnlyList<GroundPlaneDistanceEstimator.DetectionResult> GetLastResults() => _results;
 
     public void ClearResults() => _results.Clear();
 }
