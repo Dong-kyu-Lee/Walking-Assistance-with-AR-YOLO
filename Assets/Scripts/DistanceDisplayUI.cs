@@ -20,6 +20,9 @@ public class DistanceDisplayUI : MonoBehaviour
     [Tooltip("YOLO 모델 입력 이미지 너비 (픽셀) — 방향 삼등분에 사용")]
     [SerializeField] private int modelImageWidth = 640;
 
+    [Tooltip("음성 안내를 시작할 거리 임계값 (미터)")]
+    [SerializeField] private float announcementDistanceThreshold = 6.0f;
+
     private float elapsed;
     private bool isCoolingDown;
 
@@ -63,6 +66,11 @@ public class DistanceDisplayUI : MonoBehaviour
         { "carrier",          "캐리어" },
     };
 
+    private static readonly HashSet<string> DangerousVehicleLabels = new()
+    {
+        "car", "motorcycle", "bus", "truck", "bicycle"
+    };
+
     // cx: 모델 이미지 좌표(0~modelImageWidth). 화면을 삼등분해 방향 반환
     private string HorizontalDirection(float cx)
     {
@@ -70,23 +78,6 @@ public class DistanceDisplayUI : MonoBehaviour
         if (ratio < 1f / 3f) return "왼쪽";
         if (ratio < 2f / 3f) return "앞쪽";
         return "오른쪽";
-    }
-
-    // 마지막 글자의 종성 유무로 '이'/'가' 결정
-    private static string SubjectParticle(string word)
-    {
-        if (string.IsNullOrEmpty(word)) return "이";
-        char last = word[^1];
-        if (last >= 0xAC00 && last <= 0xD7A3)
-            return (last - 0xAC00) % 28 == 0 ? "가" : "이";
-        return "이";
-    }
-
-    private string tmpName = "person";
-    private float tmpDistance = 1.23f;
-    private void Start()
-    {
-        // distanceText.text = $"{tmpName}<color=green>이 </color>{tmpDistance:F1}<color=green>m 앞에 있습니다.</color>";
     }
 
     private void Update()
@@ -114,38 +105,42 @@ public class DistanceDisplayUI : MonoBehaviour
     {
         IReadOnlyList<GroundPlaneDistanceEstimator.DetectionResult> results = groundPlaneDistanceEstimator.GetLastResults();
 
-        if (results.Count == 0)
-        {
-            // distanceText.text = string.Empty;
-            return;
-        }
+        if (results.Count == 0) return;
 
-        // distanceText.text = string.Empty;
-        // bool first = true;
         GroundPlaneDistanceEstimator.DetectionResult nearest = default;
         float nearestDist = float.MaxValue;
+        GroundPlaneDistanceEstimator.DetectionResult nearestVehicle = default;
+        float nearestVehicleDist = float.MaxValue;
 
         foreach (var r in results)
         {
-            // if (!first) distanceText.text += "\n";
-            // first = false;
-
-            // distanceText.text += $"Label : {r.label}\nDistance : {r.distanceMeters:F1} m\n";
             Debug.Log($"Label : {r.label} , Distance : {r.distanceMeters:F1} m");
 
-            if (r.isMeasured && r.distanceMeters > 0f && r.distanceMeters < nearestDist)
+            if (!r.isMeasured || r.distanceMeters <= 0f) continue;
+
+            if (r.distanceMeters < nearestDist)
             {
                 nearestDist = r.distanceMeters;
                 nearest = r;
             }
+
+            if (DangerousVehicleLabels.Contains(r.label) && r.distanceMeters < nearestVehicleDist)
+            {
+                nearestVehicleDist = r.distanceMeters;
+                nearestVehicle = r;
+            }
         }
 
-        if (nearestDist < float.MaxValue && androidTTS != null)
+        // 위험 차량이 임계 거리 내에 있으면 우선 안내, 없으면 가장 가까운 객체 안내
+        bool vehicleInRange = nearestVehicleDist < announcementDistanceThreshold;
+        bool anyInRange = nearestDist < announcementDistanceThreshold;
+
+        if (androidTTS != null && (vehicleInRange || anyInRange))
         {
-            string korean = LabelKorean.TryGetValue(nearest.label, out string k) ? k : nearest.label;
-            string particle = SubjectParticle(korean);
-            string direction = HorizontalDirection(nearest.box.cx);
-            androidTTS.Speak($"{korean}{particle} {nearestDist:F1}미터 {direction}에 있습니다.");
+            var target = vehicleInRange ? nearestVehicle : nearest;
+            string korean = LabelKorean.TryGetValue(target.label, out string k) ? k : target.label;
+            string direction = HorizontalDirection(target.box.cx);
+            androidTTS.Speak($"{direction}에 {korean}");
         }
 
         groundPlaneDistanceEstimator.ClearResults();
