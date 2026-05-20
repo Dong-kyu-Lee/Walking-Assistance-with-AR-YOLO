@@ -115,3 +115,5 @@ CLAUDE.md
 # Profiler Data
 ProfileAnalyzer/
 ProfilerCaptures/
+# IDE Cache files
+*.lscache
