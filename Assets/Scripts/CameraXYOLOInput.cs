@@ -58,22 +58,27 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private Vector2 aspectCropScale = Vector2.one;
 
-    public Vector2 AspectCropScale => aspectCropScale;
+    public Vector2 AspectCropScale => aspectCropScale; 
 
+    [Header("TTS")]
+    public AndroidTTS tts;
+
+    [Header("Volume Key Input Manager")]
+    public VolumeKeyReceiver volumeKeyReceiver;
+
+    [Header("Boot / Warmup")]
+    [SerializeField] private bool useBootWarmup = true;
+    [SerializeField] private GameObject loadingImage;
+    private bool bootSequenceStarted = false;
+    private bool isWarmingUp = false;
+    private bool isAppReady = false;
+    [SerializeField] private GameObject loadingUI;
+    public bool IsAppReady => isAppReady;
 
     public Texture FrameTexture => cameraTexture;
     public int FrameWidth => cameraTexture != null ? cameraTexture.width : 0;
     public int FrameHeight => cameraTexture != null ? cameraTexture.height : 0;
     public bool HasFrame => cameraTexture != null && cameraTexture.width > 16 && cameraTexture.height > 16;
-
-    private static readonly ProfilerMarker MarkerGetFrameData =
-    new ProfilerMarker("CameraX.GetLatestFrameData");
-
-    private static readonly ProfilerMarker MarkerTextureUpload =
-        new ProfilerMarker("CameraX.TextureUpload");
-
-    private static readonly ProfilerMarker MarkerYOLO =
-        new ProfilerMarker("YOLO.ExecuteML");
 
     private IEnumerator Start()
     {
@@ -241,6 +246,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         );
     }
 
+    private void PlayStartGuideTTS()
+    {
+        tts.Speak("볼륨 버튼을 길게 누르면 조절 항목을 바꿀 수 있습니다. 조절 항목으로는 화면 크기, 줌, 고대비, 아웃라인 옵션이 있습니다. 볼륨 버튼을 짧게 누르면 선택한 항목의 값을 조절할 수 있습니다.");
+    }
     private void Update()
     {
         if (cameraController == null)
@@ -254,9 +263,22 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
             UpdateCameraFeed();
         }
 
-        //UpdateCameraFeed();
-
         if (IsOutlineMode == false) return;
+
+        if (useBootWarmup &&
+            !bootSequenceStarted &&
+            HasFrame &&
+            yoloProcessor != null &&
+            yoloProcessor.IsModelLoaded)
+        {   
+            bootSequenceStarted = true;
+            StartCoroutine(BootWarmupSequence());
+        }
+
+    // 앱 준비 전에는 일반 추론 실행 금지
+        if (!isAppReady)
+            return;
+
         if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
         {
             inferenceTimer += Time.deltaTime;
@@ -269,6 +291,44 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         }
     }
 
+    private IEnumerator BootWarmupSequence()
+    {
+        loadingImage.SetActive(true);
+        isWarmingUp = true;
+        isAppReady = false;
+        volumeKeyReceiver.IsVolumeKeyInputEnabled = false;
+
+        loadingImage.SetActive(true);
+
+        //PlayStartGuideTTS();
+
+        // TTS가 시작될 시간을 약간 줌
+        yield return new WaitForSeconds(0.2f);
+
+        // 더미 추론 1회 실행
+        if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
+        {
+            isProcessing = true;
+
+            yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
+
+            yoloProcessor.ClearAnnotations();
+
+            isProcessing = false;
+        }
+
+        // 안내가 너무 빨리 끝나는 느낌이면 약간 대기
+        yield return new WaitForSeconds(0.5f);
+
+        loadingImage.SetActive(false);
+
+        isWarmingUp = false;
+        isAppReady = true;
+        volumeKeyReceiver.IsVolumeKeyInputEnabled = true;
+
+        Debug.Log("웜업 완료: 화면 출력 및 버튼 입력 활성화");
+    }
+
     private void UpdateCameraFeed()
     {
 
@@ -279,10 +339,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
             return;
 
         byte[] frameData;
-        using (MarkerGetFrameData.Auto())
-        {
-            frameData = cameraController.Call<byte[]>("getLatestFrameData");
-        }
+        frameData = cameraController.Call<byte[]>("getLatestFrameData");
 
         if (frameData == null || frameData.Length <= 0)
             return;
@@ -291,12 +348,9 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         {
             cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         }
-        using (MarkerTextureUpload.Auto())
-        {
-            cameraTexture.LoadRawTextureData(frameData);
-            cameraTexture.Apply();
-        }
-        
+        cameraTexture.LoadRawTextureData(frameData);
+        cameraTexture.Apply();
+
         // Render Feature를 사용할 경우 RawImage 출력은 필수가 아님.
         // 디버그용 미리보기로만 사용.
 
@@ -333,11 +387,11 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     private IEnumerator RunInference()
     {
         isProcessing = true;
-        MarkerYOLO.Begin();
         yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
-        MarkerYOLO.End();
         isProcessing = false;
     }
+
+
 
     public void SetLinearZoom()
     {

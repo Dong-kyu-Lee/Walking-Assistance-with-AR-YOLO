@@ -24,6 +24,8 @@ public class VolumeKeyReceiver : MonoBehaviour
     [Header("디버그용 Text")]
     [SerializeField] private TextMeshProUGUI currentSettingTypeText;
 
+    public bool IsVolumeKeyInputEnabled = false;
+
     private float currentZoomRatio = 1.0f;
     private SettingType currentSettingType = SettingType.Zoom;
 
@@ -48,18 +50,21 @@ public class VolumeKeyReceiver : MonoBehaviour
 
     public void OnVolumeUp(string msg)
     {
+        if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("Time held (ms): " + msg);
         ExecutionVolumeUpMode();
     }
 
     public void OnVolumeDown(string msg)
     {
+        if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("Time held (ms): " + msg);
         ExecutionVolumeDownMode();
     }
 
     public void OnVolumeUpLong(string msg)
     {
+        if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("[볼륨UP 길게]");
         // SwitchToScene("ARScene");
         currentSettingType = GetNextSettingType(currentSettingType);
@@ -69,6 +74,7 @@ public class VolumeKeyReceiver : MonoBehaviour
 
     public void OnVolumeDownLong(string msg)
     {
+        if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("[볼륨DOWN 길게]");
         // SwitchToScene("MainScene");
         currentSettingType = GetBeforeSettingType(currentSettingType);
@@ -195,11 +201,11 @@ public class VolumeKeyReceiver : MonoBehaviour
     {
         return type switch
         {
-            SettingType.Zoom => "Zoom",
-            SettingType.ScreenSize => "Screen Size",
-            SettingType.HighContrast => "High Contrast",
-            SettingType.Outline => "Outline",
-            _ => "Unknown"
+            SettingType.Zoom => "줌 옵션",
+            SettingType.ScreenSize => "화면 크기 축소 옵션",
+            SettingType.HighContrast => "고대비 필터 옵션",
+            SettingType.Outline => "장애물 윤곽 강조 옵션",
+            _ => "알 수 없는 옵션"
         };
     }
     
