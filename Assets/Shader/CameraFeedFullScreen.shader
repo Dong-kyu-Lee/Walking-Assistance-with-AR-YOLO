@@ -42,6 +42,14 @@ Shader "Hidden/CameraFeed/FullScreen"
             float _Saturation;
             float _GrayscaleAmount;
 
+            float4 _CameraAspectCrop;
+
+            float2 ApplyCameraAspectCrop(float2 uv)
+            {
+                float2 crop = max(_CameraAspectCrop.xy, float2(0.0001, 0.0001));
+                return (uv - 0.5) * crop + 0.5;
+            }
+
             half4 Frag(Varyings input) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -62,9 +70,13 @@ Shader "Hidden/CameraFeed/FullScreen"
 
                 float2 localUV = (screenUV - minUV) / scale;
 
-                localUV = localUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
+                // 화면 출력용 UV에서 카메라 원본 비율을 유지하기 위한 crop UV 생성
+                float2 cameraUV = ApplyCameraAspectCrop(localUV);
 
-                half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
+                // 기존 _CameraFeed_ST, Y flip, scale/offset 반영
+                cameraUV = cameraUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
+
+                half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, cameraUV);
                 // ��� ����
                 color.rgb += _Brightness;
 
@@ -83,7 +95,7 @@ Shader "Hidden/CameraFeed/FullScreen"
                 color.rgb = saturate(color.rgb);
                 // 카메라 피드와 폴리곤 오버레이 텍스처를 동일한 UV 좌표로 샘플링
                 if (_PolygonOverlayAvailable > 0.5) {
-                    half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, localUV);
+                    half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, cameraUV);
                     color.rgb = lerp(color.rgb, poly.rgb, poly.a);
                 }
 
