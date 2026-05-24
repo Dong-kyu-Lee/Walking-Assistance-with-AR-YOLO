@@ -56,11 +56,14 @@ public class AppEntryManager : MonoBehaviour
 
     private IEnumerator BeginXRFlow()
     {
-        yield return xrRuntimeController.StartXR();
+        // 임시로 XR Plugin을 비활성화함..
+        //yield return xrRuntimeController.StartXR();
         loadingUI.SetActive(false);
         // XR 시작 후 보행 보조 기능 활성화 또는 씬 전환
         Debug.Log("XR 시작 완료");
         volumeKeyReceiver.IsVolumeKeyInputEnabled = true;
         cardboardDeviceParamsController.SetActive(true);
+
+        yield break;
     }
 }
