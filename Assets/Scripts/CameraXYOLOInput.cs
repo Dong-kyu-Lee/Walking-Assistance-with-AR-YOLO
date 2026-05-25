@@ -2,6 +2,8 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using Unity.Profiling;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 
 public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 {
@@ -43,13 +45,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     public bool HasFrame => cameraTexture != null && cameraTexture.width > 16 && cameraTexture.height > 16;
 
     private static readonly ProfilerMarker MarkerGetFrameData =
-    new ProfilerMarker("CameraX.GetLatestFrameData");
+        new ProfilerMarker("CameraX.GetLatestFrameData");
 
     private static readonly ProfilerMarker MarkerTextureUpload =
         new ProfilerMarker("CameraX.TextureUpload");
-
-    private static readonly ProfilerMarker MarkerYOLO =
-        new ProfilerMarker("YOLO.ExecuteML");
 
     private IEnumerator Start()
     {
@@ -130,34 +129,40 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private void UpdateCameraFeed()
     {
+        int width  = cameraController.Call<int>("getFrameWidth");
+    int height = cameraController.Call<int>("getFrameHeight");
+    if (width <= 0 || height <= 0) return;
 
-        int width = cameraController.Call<int>("getFrameWidth");
-        int height = cameraController.Call<int>("getFrameHeight");
+    long nativeAddr;
+    int  dataSize;
+    using (MarkerGetFrameData.Auto())
+    {
+        nativeAddr = cameraController.Call<long>("getDirectBufferAddress");
+        dataSize   = cameraController.Call<int>("getFrameDataSize");
+    }
+    if (nativeAddr == 0L || dataSize <= 0) return;
 
-        if (width <= 0 || height <= 0)
-            return;
+    if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
+        cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
 
-        byte[] frameData;
-        using (MarkerGetFrameData.Auto())
+    using (MarkerTextureUpload.Auto())
+    {
+        unsafe
         {
-            frameData = cameraController.Call<byte[]>("getLatestFrameData");
+            // Java DirectByteBuffer의 네이티브 주소를 NativeArray로 래핑 (복사 없음)
+            var na = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(
+                (void*)(System.IntPtr)nativeAddr, dataSize, Allocator.None);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            var safety = AtomicSafetyHandle.Create();
+            NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref na, safety);
+#endif
+            cameraTexture.LoadRawTextureData(na);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.Release(safety);
+#endif
         }
-
-        if (frameData == null || frameData.Length <= 0)
-            return;
-
-        if (cameraTexture == null || cameraTexture.width != width || cameraTexture.height != height)
-        {
-            cameraTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-        }
-        using (MarkerTextureUpload.Auto())
-        {
-            cameraTexture.LoadRawTextureData(frameData);
-            cameraTexture.Apply();
-        }
-        
-        // Render Feature를 사용할 경우 RawImage 출력은 필수가 아님.
-        // 디버그용 미리보기로만 사용.
+        cameraTexture.Apply();
+    }
 
         if (width != lastWidth || height != lastHeight)
         {
@@ -183,8 +188,6 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
                 aspectFitter.aspectRatio = (float)width / height;
             }
         }
-
-        
     }
 
     private IEnumerator RunInference()
@@ -192,9 +195,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         isProcessing = true;
         // 추론 시작 시점의 카메라 자세 저장 (카메라 이동 보정용)
         Quaternion captureAttitude = Input.gyro.enabled ? Input.gyro.attitude : Quaternion.identity;
-        MarkerYOLO.Begin();
         yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture, captureAttitude));
-        MarkerYOLO.End();
         isProcessing = false;
     }
 

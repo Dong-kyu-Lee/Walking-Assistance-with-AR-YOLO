@@ -1,41 +1,38 @@
-// PolygonOverlayTextureRenderer.cs
 using System.Collections.Generic;
 using UnityEngine;
 
 public class PolygonOverlayTextureRenderer : MonoBehaviour
 {
-    [SerializeField] private Material lineMaterial; // 기본 Sprites/Default 사용
-
-    // GL.LINE_STRIP은 GLES3에서 두께 1만 지원하므로, 픽셀 오프셋 다중 패스로 두께를 흉내냄.
-    // 값이 1이면 단일 선, 3이면 3×3=9패스, 5이면 5×5=25패스 (홀수 권장).
+    [SerializeField] private Material lineMaterial;
     [SerializeField, Min(1)] private int lineThicknessPx = 3;
 
     private RenderTexture overlayRT;
+    private Mesh overlayMesh;
+
+    // 매 프레임 Clear()만 하므로 GC 할당 없음
+    private readonly List<Vector3> _verts  = new List<Vector3>(4096);
+    private readonly List<int>     _tris   = new List<int>(8192);
+    private readonly List<Color>   _colors = new List<Color>(4096);
+
     private readonly List<(Vector2[] points, Color color)> pendingPolygons = new();
 
     void Start()
     {
-        // 화면 해상도로 RenderTexture 생성
         overlayRT = new RenderTexture(Screen.width, Screen.height, 0,
                                       RenderTextureFormat.ARGB32);
         overlayRT.antiAliasing = 1;
         Shader.SetGlobalTexture("_PolygonOverlayTex", overlayRT);
         Shader.SetGlobalFloat("_PolygonOverlayAvailable", 0f);
+
+        overlayMesh = new Mesh();
+        overlayMesh.MarkDynamic(); // 매 프레임 갱신됨을 GPU에 알림
     }
 
-    public void ClearAll()
-    {
-        pendingPolygons.Clear();
-    }
+    public void ClearAll()  => pendingPolygons.Clear();
 
     public void ShowPolygon(int id, Vector2[] normalizedPoints, Color color)
-    {
-        pendingPolygons.Add((normalizedPoints, color));
-    }
+        => pendingPolygons.Add((normalizedPoints, color));
 
-    // OnPreRender는 Camera 컴포넌트가 있는 GameObject에만 호출되므로 사용 불가.
-    // LateUpdate는 모든 Update/Coroutine 완료 후 호출되어
-    // RunYOLO.ExecuteML이 ShowPolygon을 채운 뒤 반드시 실행됨.
     void LateUpdate() => DrawToTexture();
 
     void DrawToTexture()
@@ -46,49 +43,76 @@ public class PolygonOverlayTextureRenderer : MonoBehaviour
             return;
         }
 
+        _verts.Clear();
+        _tris.Clear();
+        _colors.Clear();
+
+        float halfThick = lineThicknessPx * 0.5f;
+        float w = overlayRT.width;
+        float h = overlayRT.height;
+
+        foreach (var (points, col) in pendingPolygons)
+        {
+            int n = points.Length;
+            if (n < 2) continue;
+
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 p0 = new Vector2(points[i].x * w, points[i].y * h);
+                Vector2 p1 = new Vector2(points[(i + 1) % n].x * w,
+                                         points[(i + 1) % n].y * h);
+
+                Vector2 dir = p1 - p0;
+                float len = dir.magnitude;
+                if (len < 0.001f) continue;
+                dir /= len;
+
+                // 수직 벡터로 선분을 두께 있는 사각형으로 확장
+                var perp = new Vector2(-dir.y, dir.x) * halfThick;
+
+                int b = _verts.Count;
+                _verts.Add(new Vector3(p0.x + perp.x, p0.y + perp.y, 0));
+                _verts.Add(new Vector3(p0.x - perp.x, p0.y - perp.y, 0));
+                _verts.Add(new Vector3(p1.x + perp.x, p1.y + perp.y, 0));
+                _verts.Add(new Vector3(p1.x - perp.x, p1.y - perp.y, 0));
+
+                _colors.Add(col); _colors.Add(col);
+                _colors.Add(col); _colors.Add(col);
+
+                // 사각형 = 삼각형 2개
+                _tris.Add(b);     _tris.Add(b + 2); _tris.Add(b + 1);
+                _tris.Add(b + 1); _tris.Add(b + 2); _tris.Add(b + 3);
+            }
+        }
+
+        if (_verts.Count == 0)
+        {
+            Shader.SetGlobalFloat("_PolygonOverlayAvailable", 0f);
+            return;
+        }
+
+        overlayMesh.Clear();
+        overlayMesh.SetVertices(_verts);
+        overlayMesh.SetColors(_colors);
+        overlayMesh.SetTriangles(_tris, 0);
+
         var prev = RenderTexture.active;
         RenderTexture.active = overlayRT;
         GL.Clear(true, true, Color.clear);
 
         GL.PushMatrix();
-        // bottom=height, top=0 으로 설정해 GL y=0이 RT 위쪽(UV.y=1)에 저장되게 함.
-        // 셰이더의 ST 변환(localUV.y = 1 - screenUV.y) 이후 RT를 샘플링하므로,
-        // 화면 위쪽(screenUV.y=1) → localUV.y=0 → RT UV.y=0,
-        // 화면 아래쪽(screenUV.y=0) → localUV.y=1 → RT UV.y=1 로 읽힘.
-        // canvasPoints.y = 1 - maskY/res 이므로 위쪽 물체(maskY=0) → canvasY=1 → GL y=h → RT UV.y=0 ✓
-        //                                        아래쪽 물체(maskY=max) → canvasY=0 → GL y=0 → RT UV.y=1 ✓
         GL.LoadPixelMatrix(0, overlayRT.width, overlayRT.height, 0);
         lineMaterial.SetPass(0);
-
-        int half = lineThicknessPx / 2;
-        foreach (var (points, col) in pendingPolygons)
-        {
-            // 두께만큼 픽셀 오프셋을 달리한 선을 여러 번 그려 굵기를 만듦
-            for (int ox = -half; ox <= half; ox++)
-            {
-                for (int oy = -half; oy <= half; oy++)
-                {
-                    GL.Begin(GL.LINE_STRIP);
-                    GL.Color(col);
-                    foreach (var p in points)
-                        GL.Vertex3(p.x * overlayRT.width + ox,
-                                   p.y * overlayRT.height + oy, 0);
-                    // 첫 점을 다시 추가해 폐곡선 닫기
-                    if (points.Length > 0)
-                        GL.Vertex3(points[0].x * overlayRT.width + ox,
-                                   points[0].y * overlayRT.height + oy, 0);
-                    GL.End();
-                }
-            }
-        }
-
+        Graphics.DrawMeshNow(overlayMesh, Matrix4x4.identity); // 단 1번 DrawCall
         GL.PopMatrix();
+
         RenderTexture.active = prev;
         Shader.SetGlobalFloat("_PolygonOverlayAvailable", 1f);
     }
 
     void OnDestroy()
     {
-        if (overlayRT) overlayRT.Release();
+        if (overlayRT)   overlayRT.Release();
+        if (overlayMesh) Destroy(overlayMesh);
     }
 }

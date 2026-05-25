@@ -34,7 +34,7 @@ public class RunYOLO : MonoBehaviour
 
     public bool IsModelLoaded { get { return isModelLoaded; } }
 
-    const BackendType backend = BackendType.CPU;
+    const BackendType backend = BackendType.GPUCompute;
 
     private Transform displayLocation;
     private Worker worker;
@@ -139,10 +139,14 @@ public class RunYOLO : MonoBehaviour
 
         worker.Schedule(inputTensor);
 
+        // GPU 추론 커맨드 제출 후 즉시 Readback 요청하지 않고 1프레임 양보
+        // → 렌더링과 GPU 추론이 같은 프레임 내에서 경쟁하지 않도록 분리
+        yield return null;
+
         var output0 = worker.PeekOutput("output0") as Tensor<float>;
         var output1 = worker.PeekOutput("output1") as Tensor<float>;
 
-        // BackendType이 GPU일 경우, GPU->CPU로 결과 복사 
+        // GPU→CPU 비동기 Readback 요청
         output0.ReadbackRequest();
         output1.ReadbackRequest();
 
