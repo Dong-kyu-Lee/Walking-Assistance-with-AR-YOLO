@@ -33,7 +33,6 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private float zoomValue = 0.0f;
     private bool isProcessing = false;
-    private float inferenceTimer = 0f;
 
     private int lastWidth = 0;
     private int lastHeight = 0;
@@ -54,6 +53,8 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private IEnumerator Start()
     {
+        Input.gyro.enabled = true;
+
         if (Application.platform != RuntimePlatform.Android)
         {
             //Debug.Log("Android 플랫폼이 아니므로 CameraX를 시작하지 않습니다.");
@@ -119,11 +120,9 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         if (IsOutlineMode == false) return;
         if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
         {
-            inferenceTimer += Time.deltaTime;
-
-            if (inferenceTimer >= inferenceIntervalSeconds && !isProcessing)
+            // inferenceInterval 없이 이전 추론 완료 즉시 다음 추론 시작
+            if (!isProcessing)
             {
-                inferenceTimer = 0f;
                 StartCoroutine(RunInference());
             }
         }
@@ -191,8 +190,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     private IEnumerator RunInference()
     {
         isProcessing = true;
+        // 추론 시작 시점의 카메라 자세 저장 (카메라 이동 보정용)
+        Quaternion captureAttitude = Input.gyro.enabled ? Input.gyro.attitude : Quaternion.identity;
         MarkerYOLO.Begin();
-        yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture));
+        yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture, captureAttitude));
         MarkerYOLO.End();
         isProcessing = false;
     }

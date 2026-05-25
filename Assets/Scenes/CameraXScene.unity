@@ -535,8 +535,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a436bba5c726ea4bb53579a2d820629, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DistanceEstimator
-  fallbackHorizontalFovDegrees: 60
-  fallbackVerticalFovDegrees: 45
 --- !u!4 &208641307
 Transform:
   m_ObjectHideFlags: 0
@@ -1187,7 +1185,7 @@ MonoBehaviour:
   permissionRequester: {fileID: 794914121}
   useRawImagePreview: 0
   displayImage: {fileID: 1224465184}
-  inferenceIntervalSeconds: 0.2
+  inferenceIntervalSeconds: 0.1
   CameraUpdateInterval: 0.06666667
   slider: {fileID: 1998226810}
 --- !u!114 &794914120
@@ -2384,6 +2382,7 @@ MonoBehaviour:
   androidTTS: {fileID: 1238605812}
   updateInterval: 5
   modelImageWidth: 640
+  announcementDistanceThreshold: 6
 --- !u!1 &1591956417
 GameObject:
   m_ObjectHideFlags: 0
