@@ -317,8 +317,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\uCE74\uBA54\uB77C \uB192\uC774(m)"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
-  m_sharedMaterial: {fileID: -2685998455979005849, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 74a22106ed753784d9bb9f5777eadf0e, type: 2}
+  m_sharedMaterial: {fileID: 7932729793271240485, guid: 74a22106ed753784d9bb9f5777eadf0e, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2186,6 +2186,7 @@ MonoBehaviour:
   useBootWarmup: 1
   loadingImage: {fileID: 207494951}
   loadingUI: {fileID: 0}
+  XRRuntimeController: {fileID: 0}
 --- !u!114 &794914120
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3822,8 +3823,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: Setting
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
-  m_sharedMaterial: {fileID: -2685998455979005849, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 74a22106ed753784d9bb9f5777eadf0e, type: 2}
+  m_sharedMaterial: {fileID: 7932729793271240485, guid: 74a22106ed753784d9bb9f5777eadf0e, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
