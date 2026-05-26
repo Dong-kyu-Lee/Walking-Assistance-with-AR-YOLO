@@ -471,7 +471,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         }
     }
 
-    public void SetOulineMode()
+    public void SetOutlineMode()
     {
         IsOutlineMode = !IsOutlineMode;
 

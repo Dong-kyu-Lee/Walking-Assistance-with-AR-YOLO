@@ -155,13 +155,13 @@ public class AndroidTTS : MonoBehaviour
 
         if (noiseMeter.CurrentDb > -25f)        // 상대적으로 매우 시끄러움
         {
-            volume = 1.0f;
-            pitch = 2.0f;
+            volume = 0.4f;
+            pitch = 0.5f;
         }
         else if (noiseMeter.CurrentDb > -40f)   // 보통 이상
         {
-            volume = 0.85f;
-            pitch = 1.01f;
+            volume = 0.4f;
+            pitch = 0.5f;
         }
         else                       // 조용함
         {
