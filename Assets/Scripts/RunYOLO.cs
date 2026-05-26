@@ -91,7 +91,7 @@ public class RunYOLO : MonoBehaviour
 
     void Start()
     {
-        Application.targetFrameRate = 60;
+        Application.targetFrameRate = 40;
         if (!isARMode) Screen.orientation = ScreenOrientation.LandscapeLeft;
 
         labels = classesAsset.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
