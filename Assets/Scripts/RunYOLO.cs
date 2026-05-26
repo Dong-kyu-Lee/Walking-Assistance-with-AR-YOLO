@@ -34,7 +34,7 @@ public class RunYOLO : MonoBehaviour
 
     public bool IsModelLoaded { get { return isModelLoaded; } }
 
-    const BackendType backend = BackendType.CPU;
+    const BackendType backend = BackendType.GPUCompute;
 
     private Transform displayLocation;
     private Worker worker;
@@ -72,6 +72,9 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("거리 측정된 물체 중 폴리곤을 표시할 최대 개수 (가까운 순)")]
     [SerializeField] private int nearestPolygonCount = 3;
 
+    [Tooltip("스마트폰 카메라 수평 화각 (도). 카메라 이동 보정 정확도에 영향.")]
+    [SerializeField, Range(30f, 120f)] private float cameraFovH = 70f;
+
     // 사용자 인지 혼란을 줄이기 위해 중요하지 않은 클래스는 폴리곤 출력 제외
     private HashSet<string> polygonSkipLabels = new HashSet<string> { "sidewalk_normal", "sidewalk_damaged", "roadway", "bike_lane", "alley", "speed_bump", "ramp" };
     // 거리 여부에 관계 없이 무조건 폴리곤 출력할 클래스 (거리 계산은 탐지된 객체가 실제로 보행자에게 장애물이 될 때만 의미 있으므로)
@@ -88,7 +91,7 @@ public class RunYOLO : MonoBehaviour
 
     void Start()
     {
-        Application.targetFrameRate = 60;
+        Application.targetFrameRate = 40;
         if (!isARMode) Screen.orientation = ScreenOrientation.LandscapeLeft;
 
         labels = classesAsset.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
@@ -123,7 +126,7 @@ public class RunYOLO : MonoBehaviour
         }
     }
 
-    public IEnumerator ExecuteML(Texture sourceTexture)
+    public IEnumerator ExecuteML(Texture sourceTexture, Quaternion captureAttitude = default)
     {
         //ClearAnnotations();
 
@@ -136,10 +139,14 @@ public class RunYOLO : MonoBehaviour
 
         worker.Schedule(inputTensor);
 
+        // GPU 추론 커맨드 제출 후 즉시 Readback 요청하지 않고 1프레임 양보
+        // → 렌더링과 GPU 추론이 같은 프레임 내에서 경쟁하지 않도록 분리
+        yield return null;
+
         var output0 = worker.PeekOutput("output0") as Tensor<float>;
         var output1 = worker.PeekOutput("output1") as Tensor<float>;
 
-        // BackendType이 GPU일 경우, GPU->CPU로 결과 복사 
+        // GPU→CPU 비동기 Readback 요청
         output0.ReadbackRequest();
         output1.ReadbackRequest();
 
@@ -215,6 +222,15 @@ public class RunYOLO : MonoBehaviour
                     };
                     maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
 
+                    // 추론 시작과 현재 사이의 카메라 회전 변화량 계산 (카메라 이동 보정)
+                    Quaternion currentAttitude = Input.gyro.enabled ? Input.gyro.attitude : Quaternion.identity;
+                    Quaternion rotDelta = Quaternion.Inverse(captureAttitude) * currentAttitude;
+                    // 카메라 종횡비: 마스크는 정방형이지만 실제 카메라는 16:9 등 비정방형이므로
+                    // X·Y 초점거리를 각각 다르게 적용해야 위아래 보정 배율이 맞음
+                    float cameraAspect = sourceTexture != null
+                        ? (float)sourceTexture.width / sourceTexture.height
+                        : 16f / 9f;
+
                     for (int i = 0; i < numBoxes; i++)
                     {
                         if (!polygonShowIndices.Contains(i)) continue;
@@ -227,10 +243,11 @@ public class RunYOLO : MonoBehaviour
                         var canvasPoints = new Vector2[contourPoints.Count];
                         for (int p = 0; p < contourPoints.Count; p++)
                         {
-                            canvasPoints[p] = new Vector2(
+                            Vector2 normalized = new Vector2(
                                 contourPoints[p].x / maskResolution,
                                 1.0f - contourPoints[p].y / maskResolution
                             );
+                            canvasPoints[p] = CompensateRotation(normalized, rotDelta, cameraAspect);
                         }
 
                         polygonRenderer.ShowPolygon(i, canvasPoints, Color.green);
@@ -308,6 +325,40 @@ public class RunYOLO : MonoBehaviour
             showSet.Add(measured[i].idx);
 
         return showSet;
+    }
+
+    // 캡처 시점과 현재 사이의 카메라 회전 변화량을 이용해 2D 정규화 좌표를 보정한다.
+    // normPt: [0,1] 정규화 좌표, rotDelta: Inverse(captureAttitude) * currentAttitude
+    // cameraAspect: 실제 카메라 종횡비 (width/height). X·Y 초점거리를 각각 계산하는 데 사용.
+    private Vector2 CompensateRotation(Vector2 normPt, Quaternion rotDelta, float cameraAspect)
+    {
+        // [0,1] → 중심 기준 좌표
+        float cx = normPt.x - 0.5f;
+        float cy = normPt.y - 0.5f;
+
+        // 수평 화각으로 수평 초점거리 추정 (정규화 단위)
+        float fH = 0.5f / Mathf.Tan(cameraFovH * 0.5f * Mathf.Deg2Rad);
+        // 수직 초점거리: 카메라가 비정방형이므로 fV = fH * aspectRatio
+        // (수직 화각이 수평보다 좁은 만큼, 같은 정규화 거리가 더 작은 각도를 커버함)
+
+        // 카메라 공간 3D 방향 벡터 (Y축 반전: 화면 아래 = 카메라 -Y)
+        // Y를 cameraAspect로 나눠 수직 화각 차이를 보정
+        Vector3 dir = new Vector3(cx, -cy / cameraAspect, fH);
+
+        // 회전 델타를 적용해 현재 카메라 공간에서의 투영 위치 계산
+        Vector3 compensated = rotDelta * dir;
+
+        // 자이로 pitch(위아래) 극성이 화면 Y축과 반대이므로 Y 변위만 반전
+        // (기본 폴리곤 위치는 dir.y 기준이고, 변위 방향만 뒤집어야 하므로 cy 부호 전체를 바꾸지 않음)
+        compensated.y = 2f * dir.y - compensated.y;
+
+        if (compensated.z <= 0f) return normPt;
+
+        float newCx = compensated.x / compensated.z * fH;
+        // 역투영 시 Y는 fH * aspectRatio 로 스케일 복원
+        float newCy = -compensated.y / compensated.z * fH * cameraAspect;
+
+        return new Vector2(newCx + 0.5f, newCy + 0.5f);
     }
 }
 
