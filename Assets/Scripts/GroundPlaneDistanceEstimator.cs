@@ -27,7 +27,7 @@ public class GroundPlaneDistanceEstimator : MonoBehaviour
     }
 
     [Tooltip("지면으로부터 카메라까지의 높이 (미터)")]
-    [SerializeField] private float cameraHeightMeters = 1.7f;
+    public float cameraHeightMeters = 1.7f;
 
     [Tooltip("가속도계로 pitch를 자동 계산할지 여부. false이면 아래 수동 값 사용.")]
     [SerializeField] private bool useGyro = true;
