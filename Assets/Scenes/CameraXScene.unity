@@ -723,7 +723,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 208641307}
-  - component: {fileID: 208641306}
   - component: {fileID: 208641308}
   m_Layer: 0
   m_Name: DistanceEstimator
@@ -732,18 +731,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &208641306
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 208641305}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5a436bba5c726ea4bb53579a2d820629, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DistanceEstimator
 --- !u!4 &208641307
 Transform:
   m_ObjectHideFlags: 0
@@ -2069,6 +2056,7 @@ MonoBehaviour:
   groundPlaneDistanceEstimator: {fileID: 208641308}
   androidTTS: {fileID: 1238605812}
   nearestPolygonCount: 3
+  cameraFovH: 70
 --- !u!114 &794914121
 MonoBehaviour:
   m_ObjectHideFlags: 0
