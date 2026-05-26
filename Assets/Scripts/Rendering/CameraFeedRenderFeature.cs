@@ -74,20 +74,18 @@ public class CameraFeedRenderFeature : ScriptableRendererFeature
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (material == null)
-                return;
-
-            if (Shader.GetGlobalFloat(CameraFeedShaderIds.CameraFeedAvailable) < 0.5f)
-                return;
+            if (material == null) return;
+            if (Shader.GetGlobalFloat(CameraFeedShaderIds.CameraFeedAvailable) < 0.5f) return;
 
             CommandBuffer cmd = CommandBufferPool.Get("Camera Feed Render Pass");
 
             Blitter.BlitCameraTexture(cmd, source, tempTexture, material, 0);
-            Blitter.BlitCameraTexture(cmd, tempTexture, source);
+            cmd.CopyTexture(tempTexture, source); // 셰이더 없이 GPU 하드웨어 복사
 
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
         }
+
 
         public void Dispose()
         {
