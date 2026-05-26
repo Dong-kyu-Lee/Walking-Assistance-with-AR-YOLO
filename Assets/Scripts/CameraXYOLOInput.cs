@@ -81,6 +81,8 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     public int FrameHeight => cameraTexture != null ? cameraTexture.height : 0;
     public bool HasFrame => cameraTexture != null && cameraTexture.width > 16 && cameraTexture.height > 16;
 
+    public XRRuntimeController XRRuntimeController;
+
     private static readonly ProfilerMarker MarkerGetFrameData =
         new ProfilerMarker("CameraX.GetLatestFrameData");
 
@@ -469,7 +471,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         }
     }
 
-    public void SetOulineMode()
+    public void SetOutlineMode()
     {
         IsOutlineMode = !IsOutlineMode;
 

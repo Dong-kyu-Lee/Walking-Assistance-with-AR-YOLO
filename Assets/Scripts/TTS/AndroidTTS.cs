@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 
 public class AndroidTTS : MonoBehaviour
@@ -19,9 +20,33 @@ public class AndroidTTS : MonoBehaviour
 
     private float lastSpeakTime = -999f;
 
+    [Header("앰비언트 측정 필드")]
+    [SerializeField] private AmbientNoiseMeter noiseMeter;
+
+    [Header("실제 스마트폰 볼륨 조정")]
+    private AndroidJavaObject audioManager;
+    private int originalMediaVolume = -1;
+
+    [Header("DebugUI")]
+    [SerializeField] private TextMeshProUGUI pitch_text;
+    [SerializeField] private TextMeshProUGUI rate_text;
+    [SerializeField] private TextMeshProUGUI volume_text;
+
     private void Start()
     {
         InitTTS();
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    Invoke(nameof(InitAudioVolume), 0.5f);
+#endif
+    }
+
+    private void InitAudioVolume()
+    {
+        SaveCurrentMediaVolume();
+
+        // 앱 실행 중 TTS가 잘 들리도록 미디어 볼륨을 80%로 설정
+        SetMediaVolumeRatio(0.8f, false);
     }
 
     private void Update()
@@ -46,6 +71,12 @@ public class AndroidTTS : MonoBehaviour
         using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
         {
             activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+        }
+
+        using (AndroidJavaClass contextClass = new AndroidJavaClass("android.content.Context"))
+        {
+            string audioService = contextClass.GetStatic<string>("AUDIO_SERVICE");
+            audioManager = activity.Call<AndroidJavaObject>("getSystemService", audioService);
         }
 
         ttsClass = new AndroidJavaClass(TTS_CLASS_NAME);
@@ -101,7 +132,7 @@ public class AndroidTTS : MonoBehaviour
             }
 
             tts.Call<int>("setSpeechRate", 1.0f);
-            tts.Call<int>("setPitch", 1.0f);
+            tts.Call<int>("setPitch", 0.8f);
 
             isReady = true;
             Debug.Log("[AndroidTTS] TTS 준비 완료");
@@ -120,6 +151,27 @@ public class AndroidTTS : MonoBehaviour
 
     public void Speak(string text, bool interruptCurrentSpeech)
     {
+        float volume, pitch, rate;
+
+        if (noiseMeter.CurrentDb > -25f)        // 상대적으로 매우 시끄러움
+        {
+            volume = 0.4f;
+            pitch = 0.5f;
+        }
+        else if (noiseMeter.CurrentDb > -40f)   // 보통 이상
+        {
+            volume = 0.4f;
+            pitch = 0.5f;
+        }
+        else                       // 조용함
+        {
+            volume = 0.4f;
+            pitch = 0.5f;
+        }
+
+        pitch_text.text = "pitch: " + pitch.ToString();
+        volume_text.text = "volume: " + volume.ToString();
+
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (!isReady || tts == null)
         {
@@ -136,9 +188,14 @@ public class AndroidTTS : MonoBehaviour
                 ? ttsClass.GetStatic<int>("QUEUE_FLUSH")
                 : ttsClass.GetStatic<int>("QUEUE_ADD");
 
+            tts.Call<int>("setPitch", pitch);
+
             using (AndroidJavaObject bundle = new AndroidJavaObject("android.os.Bundle"))
             {
+                
                 string utteranceId = $"tts_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+
+                bundle.Call("putFloat", "volume", Mathf.Clamp01(volume));
 
                 int result = tts.Call<int>(
                     "speak",
@@ -155,6 +212,7 @@ public class AndroidTTS : MonoBehaviour
                     Debug.LogWarning("[AndroidTTS] speak 호출 실패: " + result);
                 }
             }
+
         }));
 #else
         Debug.Log("[Editor TTS] " + text);
@@ -197,6 +255,7 @@ public class AndroidTTS : MonoBehaviour
 
     private void OnDestroy()
     {
+        RestoreMediaVolume();
         Release();
     }
 
@@ -214,5 +273,77 @@ public class AndroidTTS : MonoBehaviour
         {
             owner.OnInitFromAndroid(status);
         }
+    }
+
+    // 앱 실행 시 볼륨을 일정 수치로 변경하는 메소드
+    public void SetMediaVolumeRatio(float ratio, bool showUI = false)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+    if (audioManager == null)
+    {
+        Debug.LogWarning("[AndroidTTS] AudioManager가 초기화되지 않았습니다.");
+        return;
+    }
+
+    ratio = Mathf.Clamp01(ratio);
+
+    using (AndroidJavaClass audioManagerClass = new AndroidJavaClass("android.media.AudioManager"))
+    {
+        int streamMusic = audioManagerClass.GetStatic<int>("STREAM_MUSIC");
+        int flagShowUI = audioManagerClass.GetStatic<int>("FLAG_SHOW_UI");
+
+        int maxVolume = audioManager.Call<int>("getStreamMaxVolume", streamMusic);
+        int targetVolume = Mathf.RoundToInt(maxVolume * ratio);
+
+        int flags = showUI ? flagShowUI : 0;
+
+        audioManager.Call(
+            "setStreamVolume",
+            streamMusic,
+            targetVolume,
+            flags
+        );
+
+        Debug.Log($"[AndroidTTS] Media volume set: {targetVolume}/{maxVolume}");
+    }
+#else
+        Debug.Log($"[Editor] SetMediaVolumeRatio: {ratio}");
+#endif
+    }
+
+    // 현재 볼륨값을 저장하는 메소드
+    public void SaveCurrentMediaVolume()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+    if (audioManager == null)
+        return;
+
+    using (AndroidJavaClass audioManagerClass = new AndroidJavaClass("android.media.AudioManager"))
+    {
+        int streamMusic = audioManagerClass.GetStatic<int>("STREAM_MUSIC");
+        originalMediaVolume = audioManager.Call<int>("getStreamVolume", streamMusic);
+    }
+#endif
+    }
+
+    // 저장한 볼륨값을 불러오는 메소드
+    public void RestoreMediaVolume()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+    if (audioManager == null || originalMediaVolume < 0)
+        return;
+
+    using (AndroidJavaClass audioManagerClass = new AndroidJavaClass("android.media.AudioManager"))
+    {
+        int streamMusic = audioManagerClass.GetStatic<int>("STREAM_MUSIC");
+
+        audioManager.Call(
+            "setStreamVolume",
+            streamMusic,
+            originalMediaVolume,
+            0
+        );
+    }
+#endif
     }
 }

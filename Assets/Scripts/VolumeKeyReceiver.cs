@@ -7,7 +7,8 @@ public enum SettingType
     Zoom,
     ScreenSize,
     HighContrast,
-    Outline
+    XRRendering,
+    InitSetting
 }
 
 public class VolumeKeyReceiver : MonoBehaviour
@@ -24,10 +25,13 @@ public class VolumeKeyReceiver : MonoBehaviour
     [Header("디버그용 Text")]
     [SerializeField] private TextMeshProUGUI currentSettingTypeText;
 
+    [SerializeField] private AppEntryManager appEntryManager;
+    [SerializeField] private SettingsUI settingsUI;
+
     public bool IsVolumeKeyInputEnabled = false;
 
     private float currentZoomRatio = 1.0f;
-    private SettingType currentSettingType = SettingType.Zoom;
+    public SettingType currentSettingType = SettingType.Zoom;
 
     void Start()
     {
@@ -67,9 +71,7 @@ public class VolumeKeyReceiver : MonoBehaviour
         if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("[볼륨UP 길게]");
         // SwitchToScene("ARScene");
-        currentSettingType = GetNextSettingType(currentSettingType);
-        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
-        GetVoice(GetCurrentModeName(currentSettingType));
+        GetNextSetting();
     }
 
     public void OnVolumeDownLong(string msg)
@@ -77,9 +79,25 @@ public class VolumeKeyReceiver : MonoBehaviour
         if (IsVolumeKeyInputEnabled == false) return;
         Debug.Log("[볼륨DOWN 길게]");
         // SwitchToScene("MainScene");
+        GetBeforeSetting();
+    }
+
+    public void GetBeforeSetting()
+    {
+        Debug.Log($"Current Setting Type : {currentSettingType}");
         currentSettingType = GetBeforeSettingType(currentSettingType);
         currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
         GetVoice(GetCurrentModeName(currentSettingType));
+        settingsUI.ShowSelectedBtnEffect(currentSettingType);
+    }
+
+    public void GetNextSetting()
+    {
+        Debug.Log($"Current Setting Type : {currentSettingType}");
+        currentSettingType = GetNextSettingType(currentSettingType);
+        currentSettingTypeText.text = GetCurrentModeName(currentSettingType);
+        GetVoice(GetCurrentModeName(currentSettingType));
+        settingsUI.ShowSelectedBtnEffect(currentSettingType);
     }
 
     // ────────────────────────────────────────────
@@ -142,8 +160,9 @@ public class VolumeKeyReceiver : MonoBehaviour
         {
             SettingType.Zoom => SettingType.ScreenSize,
             SettingType.ScreenSize => SettingType.HighContrast,
-            SettingType.HighContrast => SettingType.Outline,
-            SettingType.Outline => SettingType.Zoom,
+            SettingType.HighContrast => SettingType.XRRendering,
+            SettingType.XRRendering => SettingType.InitSetting,
+            SettingType.InitSetting => SettingType.Zoom,
             _ => SettingType.Zoom
         };
     }
@@ -151,10 +170,11 @@ public class VolumeKeyReceiver : MonoBehaviour
     {
         return type switch
         {
-            SettingType.Zoom => SettingType.Outline,
-            SettingType.ScreenSize => SettingType.Zoom,
+            SettingType.Zoom => SettingType.InitSetting,
+            SettingType.InitSetting => SettingType.XRRendering,
+            SettingType.XRRendering => SettingType.HighContrast,
             SettingType.HighContrast => SettingType.ScreenSize,
-            SettingType.Outline => SettingType.HighContrast,
+            SettingType.ScreenSize => SettingType.Zoom,
             _ => SettingType.Zoom
         };
     }
@@ -172,8 +192,11 @@ public class VolumeKeyReceiver : MonoBehaviour
             case SettingType.HighContrast:
                 SetHighContrastMode();
                 break;
-            case SettingType.Outline:
-                cameraX.SetOulineMode();
+            case SettingType.XRRendering:
+                settingsUI.OnClickBeginXRRendering();
+                break;
+            case SettingType.InitSetting:
+                settingsUI.OpenInitialSetting(false);
                 break;
         }
     }
@@ -191,20 +214,24 @@ public class VolumeKeyReceiver : MonoBehaviour
             case SettingType.HighContrast:
                 SetLowContrastMode();
                 break;
-            case SettingType.Outline:
-                cameraX.SetOulineMode();
+            case SettingType.XRRendering:
+                settingsUI.OnClickExitXRRendering();
+                break;
+            case SettingType.InitSetting:
+                settingsUI.OpenInitialSetting(true);
                 break;
         }
     }
 
-    private string GetCurrentModeName(SettingType type)
+    public string GetCurrentModeName(SettingType type)
     {
         return type switch
         {
             SettingType.Zoom => "줌 옵션",
             SettingType.ScreenSize => "화면 크기 축소 옵션",
             SettingType.HighContrast => "고대비 필터 옵션",
-            SettingType.Outline => "장애물 윤곽 강조 옵션",
+            SettingType.XRRendering => "양안 렌더링 옵션",
+            SettingType.InitSetting => "초기 설정 옵션",
             _ => "알 수 없는 옵션"
         };
     }

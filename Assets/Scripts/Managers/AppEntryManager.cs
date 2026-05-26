@@ -4,14 +4,13 @@ using UnityEngine;
 
 public class AppEntryManager : MonoBehaviour
 {
+    [SerializeField] private SettingsUI settingsUI;
     [SerializeField] private XRRuntimeController xrRuntimeController;
-    [SerializeField] private GameObject setupUI;
-    [SerializeField] private GameObject loadingUI;
-    [SerializeField] private TMP_InputField cameraHeightInputField;
     [SerializeField] private AndroidTTS androidTTS;
     [SerializeField] private GroundPlaneDistanceEstimator groundPlaneDistanceEstimator;
     [SerializeField] private VolumeKeyReceiver volumeKeyReceiver;
     [SerializeField] private GameObject cardboardDeviceParamsController;
+    [SerializeField] private CameraXYOLOInput cameraXYOLOInput;
 
     void Start()
     {
@@ -21,46 +20,53 @@ public class AppEntryManager : MonoBehaviour
     public IEnumerator Init()
     {
         cardboardDeviceParamsController.SetActive(false);
+        cameraXYOLOInput.SetOutlineMode();
 
-        loadingUI.SetActive(true);
-        setupUI.SetActive(false);
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(3f);
+        settingsUI.SetLoadingUI(false);
 
         bool isConfigured = PlayerPrefs.GetInt("CameraHeightConfigured", 0) == 1;
-        if (isConfigured)
-        {
-            StartCoroutine(BeginXRFlow());
-            androidTTS.Speak("카메라 높이 설정이 완료되었습니다. XR 환경으로 진입합니다.");
-        }
-        else
-        {
-            loadingUI.SetActive(false);
-            setupUI.SetActive(true);
-            androidTTS.Speak("카메라 높이 설정이 완료되지 않았습니다. 설정을 진행해주세요.");
-        }
+        
+        settingsUI.OpenInitialSetting(isConfigured, true);
     }
 
-    public void OnSetupCompleted()
+    public void OnSetupCompleted(string cameraHeight)
     {
-        if (float.TryParse(cameraHeightInputField.text, out float results))
+        if (float.TryParse(cameraHeight, out float results))
         {
             PlayerPrefs.SetFloat("CameraHeightM", results);
             PlayerPrefs.SetInt("CameraHeightConfigured", 1);
             PlayerPrefs.Save();
             groundPlaneDistanceEstimator.cameraHeightMeters = results;
         }
-        setupUI.SetActive(false);
-        loadingUI.SetActive(true);
+        settingsUI.OpenInitialSetting(true);
+    }
+
+    public void OnClickXRRendering()
+    {
         StartCoroutine(BeginXRFlow());
+    }
+
+    public void OnClickExitXR()
+    {
+        StartCoroutine(EndXRFlow());
     }
 
     private IEnumerator BeginXRFlow()
     {
         yield return xrRuntimeController.StartXR();
-        loadingUI.SetActive(false);
         // XR 시작 후 보행 보조 기능 활성화 또는 씬 전환
         Debug.Log("XR 시작 완료");
-        volumeKeyReceiver.IsVolumeKeyInputEnabled = true;
         cardboardDeviceParamsController.SetActive(true);
+
+        yield break;
+    }
+
+    private IEnumerator EndXRFlow()
+    {
+        xrRuntimeController.StopXR();
+        cardboardDeviceParamsController.SetActive(false);
+        settingsUI.OpenSettingUI();
+        yield break;
     }
 }

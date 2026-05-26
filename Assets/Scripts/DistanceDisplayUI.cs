@@ -75,9 +75,9 @@ public class DistanceDisplayUI : MonoBehaviour
     private string HorizontalDirection(float cx)
     {
         float ratio = cx / modelImageWidth;
-        if (ratio < 1f / 3f) return "왼쪽";
-        if (ratio < 2f / 3f) return "앞쪽";
-        return "오른쪽";
+        if (ratio < 1f / 3f) return "전방 좌측";
+        if (ratio < 2f / 3f) return "전방 중앙";
+        return "전방 우측";
     }
 
     private void Update()
@@ -111,7 +111,7 @@ public class DistanceDisplayUI : MonoBehaviour
         float nearestDist = float.MaxValue;
         GroundPlaneDistanceEstimator.DetectionResult nearestVehicle = default;
         float nearestVehicleDist = float.MaxValue;
-
+    
         foreach (var r in results)
         {
             Debug.Log($"Label : {r.label} , Distance : {r.distanceMeters:F1} m");
@@ -138,9 +138,10 @@ public class DistanceDisplayUI : MonoBehaviour
         if (androidTTS != null && (vehicleInRange || anyInRange))
         {
             var target = vehicleInRange ? nearestVehicle : nearest;
+            float distance = vehicleInRange ? nearestVehicleDist : nearestDist;
             string korean = LabelKorean.TryGetValue(target.label, out string k) ? k : target.label;
             string direction = HorizontalDirection(target.box.cx);
-            androidTTS.Speak($"{direction}에 {korean}");
+            androidTTS.Speak($"{direction} {distance}미터 {korean}");
         }
 
         groundPlaneDistanceEstimator.ClearResults();
