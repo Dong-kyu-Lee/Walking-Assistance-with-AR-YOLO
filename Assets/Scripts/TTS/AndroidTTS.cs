@@ -26,6 +26,10 @@ public class AndroidTTS : MonoBehaviour
     [Header("실제 스마트폰 볼륨 조정")]
     private AndroidJavaObject audioManager;
     private int originalMediaVolume = -1;
+    [SerializeField] private float volume = 0.5f;
+    [SerializeField] private float pitch = 1f;
+    public float Volume { get => volume; }
+    public float Pitch { get => pitch; }
 
     [Header("DebugUI")]
     [SerializeField] private TextMeshProUGUI pitch_text;
@@ -151,26 +155,26 @@ public class AndroidTTS : MonoBehaviour
 
     public void Speak(string text, bool interruptCurrentSpeech)
     {
-        float volume, pitch, rate;
+        float volume1, pitch1, rate;
 
         if (noiseMeter.CurrentDb > -25f)        // 상대적으로 매우 시끄러움
         {
-            volume = 0.4f;
-            pitch = 0.5f;
+            volume1 = 0.4f;
+            pitch1 = 0.5f;
         }
         else if (noiseMeter.CurrentDb > -40f)   // 보통 이상
         {
-            volume = 0.4f;
-            pitch = 0.5f;
+            volume1 = 0.4f;
+            pitch1 = 0.5f;
         }
         else                       // 조용함
         {
-            volume = 0.4f;
-            pitch = 0.5f;
+            volume1 = 0.4f;
+            pitch1 = 0.5f;
         }
 
-        pitch_text.text = "pitch: " + pitch.ToString();
-        volume_text.text = "volume: " + volume.ToString();
+        pitch_text.text = "pitch: " + pitch1.ToString();
+        volume_text.text = "volume: " + volume1.ToString();
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (!isReady || tts == null)
@@ -346,4 +350,30 @@ public class AndroidTTS : MonoBehaviour
     }
 #endif
     }
+
+    public void AddVolume()
+    {
+        volume = Mathf.Clamp01(volume + 0.1f);
+        volume = Mathf.Round(volume * 10f) / 10f; // 소수점 첫째 자리까지 반올림
+    }
+
+    public void RemoveVolume()
+    {
+        volume = Mathf.Clamp01(volume - 0.1f);
+        volume = Mathf.Round(volume * 10f) / 10f; // 소수점 첫째 자리까지 반올림
+    }
+
+    public void AddPitch()
+    {
+        pitch = Mathf.Clamp(pitch + 0.1f, 0.1f, 2f);
+        pitch = Mathf.Round(pitch * 10f) / 10f; // 소수점 첫째 자리까지 반올림
+    }
+
+    public void RemovePitch()
+    {
+        pitch = Mathf.Clamp(pitch - 0.1f, 0.1f, 2f);
+        pitch = Mathf.Round(pitch * 10f) / 10f; // 소수점 첫째 자리까지 반올림
+    }
+
+    public void ShowTestTTS() => Speak("테스트 음성 입니다.");
 }

@@ -46,6 +46,8 @@ Shader "Hidden/CameraFeed/FullScreen"
 
             float4 _CameraAspectFit;
 
+            float _UseXRUv;
+
             float2 ApplyCameraAspectCrop(float2 uv)
             {
                 float2 crop = max(_CameraAspectCrop.xy, float2(0.0001, 0.0001));
@@ -80,11 +82,18 @@ Shader "Hidden/CameraFeed/FullScreen"
 
                 // 기존 _CameraFeed_ST, Y flip, scale/offset 반영
                 cameraUV = cameraUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
-
+                
+                half4 color;
+                if (_UseXRUv > 0.5)
+                {
+                    color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, cameraUV);
+                }
+                else
+                {
+                    color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
+                }
                 //디버그용(양안 렌더링 X 화면용)
-                half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, localUV);
-
-                //half4 color = SAMPLE_TEXTURE2D(_CameraFeedTex, sampler_CameraFeedTex, cameraUV);
+                
                 // ��� ����
                 color.rgb += _Brightness;
 
@@ -103,9 +112,17 @@ Shader "Hidden/CameraFeed/FullScreen"
                 color.rgb = saturate(color.rgb);
                 // 카메라 피드와 폴리곤 오버레이 텍스처를 동일한 UV 좌표로 샘플링
                 if (_PolygonOverlayAvailable > 0.5) {
+                    if (_UseXRUv > 0.5)
+                    {
+                        half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, cameraUV);
+                        color.rgb = lerp(color.rgb, poly.rgb, poly.a);
+                    }
+                    else
+                    {
                     half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, localUV);
                     //half4 poly = SAMPLE_TEXTURE2D(_PolygonOverlayTex, sampler_PolygonOverlayTex, cameraUV);
                     color.rgb = lerp(color.rgb, poly.rgb, poly.a);
+                    }
                 }
 
                 return color;

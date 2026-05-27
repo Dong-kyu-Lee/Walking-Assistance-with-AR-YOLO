@@ -18,6 +18,9 @@ public class SettingsUI : MonoBehaviour
     // initialSettingUIExitBtn : 초기 설정 화면에서 나가기 버튼  ( 앱을 처음 실행할 때는 보이지 않도록 설정하고, 그 이후부터는 보이도록 설정)
     [SerializeField] private GameObject initialSettingUIExitBtn;
 
+    [SerializeField] private TextMeshProUGUI currentVolumeText;
+    [SerializeField] private TextMeshProUGUI currentPitchText;
+
 
     [SerializeField] private Button zoomBtn;
     [SerializeField] private Button screenSizeBtn;
@@ -39,18 +42,23 @@ public class SettingsUI : MonoBehaviour
         volumeKeyReceiver.IsVolumeKeyInputEnabled = false;
         initialSettingUIExitBtn.SetActive(false);
 
-        zoomBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.Zoom));
-        screenSizeBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.ScreenSize));
-        highContrastBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.HighContrast));
-        xrRenderBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.XRRendering));
-        initSettingBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.InitSetting));
+        zoomBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.Zoom, zoomBtn.gameObject));
+        screenSizeBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.ScreenSize, screenSizeBtn.gameObject));
+        highContrastBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.HighContrast, highContrastBtn.gameObject));
+        xrRenderBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.XRRendering, xrRenderBtn.gameObject));
+        initSettingBtn.onClick.AddListener(() => OnClickSettingTypeBtn(SettingType.InitSetting, initSettingBtn.gameObject));
+        currentVolumeText.text = androidTTS.Volume.ToString();
+        currentPitchText.text = androidTTS.Pitch.ToString();
+
+        EventSystem.current.SetSelectedGameObject(zoomBtn.gameObject);
     }
     
-    private void OnClickSettingTypeBtn(SettingType type)
+    private void OnClickSettingTypeBtn(SettingType type, GameObject obj)
     {
         volumeKeyReceiver.currentSettingType = type;
         string typeName = volumeKeyReceiver.GetCurrentModeName(type);
         androidTTS.Speak(typeName, true);
+        EventSystem.current.SetSelectedGameObject(obj);
     }
     public void SetLoadingUI(bool isLoading)
     {
@@ -116,5 +124,29 @@ public class SettingsUI : MonoBehaviour
         settingUI.SetActive(true);
         appEntrymanager.OnClickExitXR();
 
+    }
+
+    public void OnClickRightVolumeBtn()
+    {
+        androidTTS.AddVolume();
+        currentVolumeText.text = androidTTS.Volume.ToString("0.0");
+    }
+
+    public void OnClickLeftVolumeBtn()
+    {
+        androidTTS.RemoveVolume();
+        currentVolumeText.text = androidTTS.Volume.ToString("0.0");
+    }
+
+    public void OnClickRightPitchBtn()
+    {
+        androidTTS.AddPitch();
+        currentPitchText.text = androidTTS.Pitch.ToString("0.0");
+    }
+
+    public void OnClickLeftPitchBtn()
+    {
+        androidTTS.RemovePitch();
+        currentPitchText.text = androidTTS.Pitch.ToString("0.0");
     }
 }
