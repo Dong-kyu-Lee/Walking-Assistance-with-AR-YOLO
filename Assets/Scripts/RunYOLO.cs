@@ -270,6 +270,249 @@ public class RunYOLO : MonoBehaviour
         }
     }
 
+    public IEnumerator ExecuteMLForJson(
+    Texture sourceTexture,
+    Action<List<DemoObjectJson>> onComplete,
+    Quaternion captureAttitude = default)
+    {
+        yield return ExecuteMLInternal(
+            sourceTexture,
+            captureAttitude,
+            drawPolygon: false,
+            onComplete: onComplete
+        );
+    }
+
+    private IEnumerator ExecuteMLInternal(
+    Texture sourceTexture,
+    Quaternion captureAttitude,
+    bool drawPolygon,
+    Action<List<DemoObjectJson>> onComplete)
+    {
+        List<DemoObjectJson> jsonObjects = new();
+
+        if (sourceTexture == null)
+        {
+            onComplete?.Invoke(jsonObjects);
+            yield break;
+        }
+
+        // UV 좌표의 Y축을 반전시켜 텍스처를 상하로 뒤집어 targetRT에 복사
+        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+
+        TextureConverter.ToTensor(targetRT, inputTensor, default);
+
+        worker.Schedule(inputTensor);
+
+        // GPU 추론 커맨드 제출 후 1프레임 대기
+        yield return null;
+
+        var output0 = worker.PeekOutput("output0") as Tensor<float>;
+        var output1 = worker.PeekOutput("output1") as Tensor<float>;
+
+        if (output0 == null || output1 == null)
+        {
+            Debug.LogError("YOLO output0 또는 output1을 찾을 수 없습니다.");
+            onComplete?.Invoke(jsonObjects);
+            yield break;
+        }
+
+        output0.ReadbackRequest();
+        output1.ReadbackRequest();
+
+        while (!output0.IsReadbackRequestDone() || !output1.IsReadbackRequestDone())
+        {
+            yield return null;
+        }
+
+        var shape0 = output0.shape;
+        int dim1 = shape0.rank > 1 ? shape0[shape0.rank - 2] : 1;
+        int dim2 = shape0.rank > 0 ? shape0[shape0.rank - 1] : 1;
+
+        int numAnchors = math.max(dim1, dim2);
+        int numAttributes = math.min(dim1, dim2);
+        int numMaskWeights = 32;
+        int numClasses = numAttributes - 4 - numMaskWeights;
+        bool isTransposed = dim1 == numAnchors;
+
+        var outputData0 = output0.DownloadToNativeArray();
+        var outputData1 = output1.DownloadToNativeArray();
+
+        var resultBoxes = new NativeList<BoxData>(Allocator.TempJob);
+        var resultWeights = new NativeList<float>(Allocator.TempJob);
+
+        try
+        {
+            var nmsJob = new NMSJob
+            {
+                outputData = outputData0,
+                numAnchors = numAnchors,
+                numClasses = numClasses,
+                numMaskWeights = numMaskWeights,
+                isTransposed = isTransposed,
+                iouThreshold = iouThreshold,
+                scoreThreshold = scoreThreshold,
+                resultBoxes = resultBoxes,
+                resultWeights = resultWeights
+            };
+
+            nmsJob.Schedule().Complete();
+
+            if (groundPlaneDistanceEstimator != null)
+            {
+                groundPlaneDistanceEstimator.Process(resultBoxes, labels, imageWidth);
+            }
+
+            if (drawPolygon && polygonRenderer != null)
+            {
+                polygonRenderer.ClearAll();
+            }
+
+            int numBoxes = math.min(resultBoxes.Length, 200);
+
+            HashSet<int> polygonShowIndices = BuildPolygonShowSet(
+                resultBoxes,
+                groundPlaneDistanceEstimator != null ? groundPlaneDistanceEstimator.GetLastResults() : null,
+                labels,
+                numBoxes
+            );
+
+            if (numBoxes > 0)
+            {
+                var perObjectMasks =
+                    new NativeArray<byte>(numBoxes * maskResolution * maskResolution, Allocator.TempJob);
+
+                try
+                {
+                    var maskJob = new MaskGenerationJob
+                    {
+                        prototypes = outputData1,
+                        boxes = resultBoxes.AsArray().GetSubArray(0, numBoxes),
+                        maskWeights = resultWeights.AsArray().GetSubArray(0, numBoxes * numMaskWeights),
+                        perObjectMasks = perObjectMasks,
+                        maskRes = maskResolution,
+                        imgRes = imageWidth,
+                        numMaskWeights = numMaskWeights
+                    };
+
+                    maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
+
+                    Quaternion currentAttitude = Input.gyro.enabled
+                        ? Input.gyro.attitude
+                        : Quaternion.identity;
+
+                    Quaternion rotDelta = Quaternion.Inverse(captureAttitude) * currentAttitude;
+
+                    float cameraAspect = sourceTexture != null
+                        ? (float)sourceTexture.width / sourceTexture.height
+                        : 16f / 9f;
+
+                    for (int i = 0; i < numBoxes; i++)
+                    {
+                        if (!polygonShowIndices.Contains(i))
+                            continue;
+
+                        var contourPoints = MarchingSquaresUtil.GetContour(
+                            perObjectMasks,
+                            maskResolution,
+                            i
+                        );
+
+                        if (contourPoints.Count < 3)
+                            continue;
+
+                        var canvasPoints = new Vector2[contourPoints.Count];
+
+                        for (int p = 0; p < contourPoints.Count; p++)
+                        {
+                            Vector2 normalized = new Vector2(
+                                contourPoints[p].x / maskResolution,
+                                1.0f - contourPoints[p].y / maskResolution
+                            );
+
+                            canvasPoints[p] = CompensateRotation(
+                                normalized,
+                                rotDelta,
+                                cameraAspect
+                            );
+                        }
+
+                        BoxData box = resultBoxes[i];
+
+                        string className =
+                            box.classID >= 0 && box.classID < labels.Length
+                                ? labels[box.classID]
+                                : $"class_{box.classID}";
+
+                        DemoObjectJson obj = new DemoObjectJson
+                        {
+                            className = className,
+                            classId = box.classID,
+                            score = box.score,
+                            priority = GetDemoPriority(className),
+                            box = new DemoBoxJson
+                            {
+                                cx = box.cx / imageWidth,
+                                cy = box.cy / imageHeight,
+                                w = box.w / imageWidth,
+                                h = box.h / imageHeight
+                            },
+                            polygon = new List<DemoPointJson>()
+                        };
+
+                        for (int p = 0; p < canvasPoints.Length; p++)
+                        {
+                            obj.polygon.Add(new DemoPointJson
+                            {
+                                x = Mathf.Clamp01(canvasPoints[p].x),
+                                y = Mathf.Clamp01(canvasPoints[p].y)
+                            });
+                        }
+
+                        jsonObjects.Add(obj);
+
+                        if (drawPolygon && polygonRenderer != null)
+                        {
+                            polygonRenderer.ShowPolygon(i, canvasPoints, Color.green);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (perObjectMasks.IsCreated)
+                        perObjectMasks.Dispose();
+                }
+            }
+        }
+        finally
+        {
+            if (resultBoxes.IsCreated) resultBoxes.Dispose();
+            if (resultWeights.IsCreated) resultWeights.Dispose();
+            if (outputData0.IsCreated) outputData0.Dispose();
+            if (outputData1.IsCreated) outputData1.Dispose();
+        }
+
+        onComplete?.Invoke(jsonObjects);
+    }
+
+    private int GetDemoPriority(string className)
+    {
+        return className switch
+        {
+            "motorcycle" => 100,
+            "bus" => 95,
+            "truck" => 95,
+            "car" => 90,
+            "bicycle" => 80,
+            "wheelchair" => 85,
+            "person" => 70,
+            "crosswalk" => 60,
+            "stairs" => 80,
+            "braille_blocks" => 60,
+            _ => 50
+        };
+    }
+
     public void ClearAnnotations()
     {
         polygonRenderer.ClearAll();

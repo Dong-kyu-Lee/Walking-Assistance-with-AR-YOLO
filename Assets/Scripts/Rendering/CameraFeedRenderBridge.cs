@@ -1,5 +1,13 @@
 using UnityEngine;
 
+public enum FeedSourceMode
+{
+    CameraX,
+    DemoVideo
+}
+
+
+
 [DefaultExecutionOrder(50)]
 public class CameraFeedRenderBridge : MonoBehaviour
 {
@@ -8,6 +16,12 @@ public class CameraFeedRenderBridge : MonoBehaviour
 
     [Header("Texture Options")]
     [SerializeField] private bool flipY = true;
+
+    [Header("Feed Source")]
+    [SerializeField] private FeedSourceMode feedSourceMode = FeedSourceMode.CameraX;
+
+    [Header("Demo Video Input")]
+    [SerializeField] private VideoFeedToRenderFeature videoFeed;
 
     private ICameraFrameSource frameSource;
 
