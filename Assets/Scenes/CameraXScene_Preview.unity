@@ -2572,6 +2572,7 @@ MonoBehaviour:
   volumeKeyReceiver: {fileID: 1646404925}
   cardboardDeviceParamsController: {fileID: 1743628688}
   cameraXYOLOInput: {fileID: 794914119}
+  flipCameraFeedYInXR: 1
 --- !u!4 &599395656
 Transform:
   m_ObjectHideFlags: 0

@@ -11,6 +11,7 @@ public class AppEntryManager : MonoBehaviour
     [SerializeField] private VolumeKeyReceiver volumeKeyReceiver;
     [SerializeField] private GameObject cardboardDeviceParamsController;
     [SerializeField] private CameraXYOLOInput cameraXYOLOInput;
+    [SerializeField] private bool flipCameraFeedYInXR = true;
 
     void Start()
     {
@@ -20,6 +21,7 @@ public class AppEntryManager : MonoBehaviour
     public IEnumerator Init()
     {
         cardboardDeviceParamsController.SetActive(false);
+        SetCameraFeedXrMode(false);
         cameraXYOLOInput.SetOutlineMode();
 
         yield return new WaitForSeconds(3f);
@@ -58,16 +60,25 @@ public class AppEntryManager : MonoBehaviour
         // XR 시작 후 보행 보조 기능 활성화 또는 씬 전환
         Debug.Log("XR 시작 완료");
         cardboardDeviceParamsController.SetActive(true);
-        Shader.SetGlobalFloat("_UseXRUv", 1.0f);
+        SetCameraFeedXrMode(true);
         yield break;
     }
 
     private IEnumerator EndXRFlow()
     {
         xrRuntimeController.StopXR();
-        Shader.SetGlobalFloat("_UseXRUv", 0.0f);
+        SetCameraFeedXrMode(false);
         cardboardDeviceParamsController.SetActive(false);
         settingsUI.OpenSettingUI();
         yield break;
+    }
+
+    private void SetCameraFeedXrMode(bool enabled)
+    {
+        Shader.SetGlobalFloat(CameraFeedShaderIds.UseXRUv, enabled ? 1f : 0f);
+        Shader.SetGlobalFloat(
+            CameraFeedShaderIds.XRCameraFeedFlipY,
+            enabled && flipCameraFeedYInXR ? 1f : 0f
+        );
     }
 }

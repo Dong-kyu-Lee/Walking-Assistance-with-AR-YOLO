@@ -47,11 +47,22 @@ Shader "Hidden/CameraFeed/FullScreen"
             float4 _CameraAspectFit;
 
             float _UseXRUv;
+            float _XRCameraFeedFlipY;
 
             float2 ApplyCameraAspectCrop(float2 uv)
             {
                 float2 crop = max(_CameraAspectCrop.xy, float2(0.0001, 0.0001));
                 return (uv - 0.5) * crop + 0.5;
+            }
+
+            float2 ApplyXRCameraFeedFlip(float2 uv)
+            {
+                if (_XRCameraFeedFlipY > 0.5)
+                {
+                    return float2(uv.x, 1.0 - uv.y);
+                }
+
+                return uv;
             }
 
             half4 Frag(Varyings input) : SV_Target
@@ -82,6 +93,7 @@ Shader "Hidden/CameraFeed/FullScreen"
 
                 // 기존 _CameraFeed_ST, Y flip, scale/offset 반영
                 cameraUV = cameraUV * _CameraFeed_ST.xy + _CameraFeed_ST.zw;
+                cameraUV = ApplyXRCameraFeedFlip(cameraUV);
                 
                 half4 color;
                 if (_UseXRUv > 0.5)

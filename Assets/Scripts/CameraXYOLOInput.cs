@@ -219,7 +219,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         if (!useAspectCorrection)
         {
             aspectCropScale = Vector2.one;
-            Shader.SetGlobalVector("_CameraAspectCrop", new Vector4(1f, 1f, 0f, 0f));
+            Shader.SetGlobalVector(CameraFeedShaderIds.CameraAspectCrop, new Vector4(1f, 1f, 0f, 0f));
             return;
         }
 
@@ -247,7 +247,7 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         aspectCropScale = new Vector2(cropX, cropY);
 
         Shader.SetGlobalVector(
-            "_CameraAspectCrop",
+            CameraFeedShaderIds.CameraAspectCrop,
             new Vector4(cropX, cropY, 0f, 0f)
         );
 

@@ -6,6 +6,9 @@ public static class CameraFeedShaderIds
     public static readonly int CameraFeedAvailable = Shader.PropertyToID("_CameraFeedAvailable");
     public static readonly int CameraFeedAspect = Shader.PropertyToID("_CameraFeedAspect");
     public static readonly int CameraFeedST = Shader.PropertyToID("_CameraFeed_ST");
+    public static readonly int CameraAspectCrop = Shader.PropertyToID("_CameraAspectCrop");
+    public static readonly int UseXRUv = Shader.PropertyToID("_UseXRUv");
+    public static readonly int XRCameraFeedFlipY = Shader.PropertyToID("_XRCameraFeedFlipY");
 
     public static readonly int ViewScale = Shader.PropertyToID("_ViewScale");
     public static readonly int ViewCenter = Shader.PropertyToID("_ViewCenter");
