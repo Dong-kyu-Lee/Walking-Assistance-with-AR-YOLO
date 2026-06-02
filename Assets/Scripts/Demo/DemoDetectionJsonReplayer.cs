@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Video;
 
@@ -10,6 +11,8 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
 
     [Header("JSON")]
     [SerializeField] private TextAsset detectionJsonFile;
+    [SerializeField] private bool loadJsonFromStreamingAssets = true;
+    [SerializeField] private string streamingAssetsJsonPath = "Demo/demo_detections.json";
 
     [Header("Polygon Renderer")]
     [SerializeField] private PolygonOverlayTextureRenderer polygonRenderer;
@@ -17,33 +20,44 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
     [Header("Options")]
     [SerializeField] private bool useFrameReadyEvent = true;
     [SerializeField] private bool setCameraFeedTexture = true;
-    [SerializeField] private bool showOnlyHighPriority = true;
+    [SerializeField] private bool playOnStart = true;
+    [SerializeField] private bool loop = false;
+    [SerializeField] private bool showOnlyHighPriority = false;
     [SerializeField] private int minPriority = 70;
     [SerializeField] private int maxObjectCount = 3;
+    [SerializeField] private bool holdLastDetectionOnEmptyFrames = true;
+    [SerializeField] private int maxHoldFrameGap = 10;
+    [SerializeField] private bool logLifecycle = true;
+    [SerializeField] private bool logDrawStats = true;
 
     private DemoDetectionJson detectionJson;
     private Dictionary<int, DemoFrameJson> frameMap;
-
     private long lastFrame = -1;
     private DemoFrameJson lastValidFrameData;
+    private int lastValidFrameIndex = -1;
+    private float lastPlaybackLogTime = -1f;
+    private bool playbackRequested;
 
     private void Start()
     {
-        LoadJson();
-
-        videoPlayer.playOnAwake = false;
-        videoPlayer.isLooping = false;
-        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-        videoPlayer.targetTexture = videoRenderTexture;
-        videoPlayer.waitForFirstFrame = true;
-
-        if (setCameraFeedTexture)
+        if (logLifecycle)
         {
-            Shader.SetGlobalTexture("_CameraFeedTex", videoRenderTexture);
+            Debug.Log("[DemoReplayer] Start.");
         }
 
-        videoPlayer.Prepare();
+        if (!ValidateReferences())
+            return;
+
+        LoadJson();
+
+        if (frameMap == null)
+            return;
+
+        SetupVideoPlayerForReplay();
+        ApplyCameraFeedTexture();
+
         videoPlayer.prepareCompleted += OnPrepared;
+        videoPlayer.Prepare();
     }
 
     private void OnDestroy()
@@ -55,36 +69,76 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         }
     }
 
+    private bool ValidateReferences()
+    {
+        if (videoPlayer == null)
+        {
+            Debug.LogError("[DemoReplayer] VideoPlayer is not assigned.");
+            return false;
+        }
+
+        if (videoRenderTexture == null)
+        {
+            Debug.LogError("[DemoReplayer] videoRenderTexture is not assigned.");
+            return false;
+        }
+
+        if (!loadJsonFromStreamingAssets && detectionJsonFile == null)
+        {
+            Debug.LogError("[DemoReplayer] detectionJsonFile is not assigned.");
+            return false;
+        }
+
+        if (polygonRenderer == null)
+        {
+            Debug.LogError("[DemoReplayer] PolygonOverlayTextureRenderer is not assigned.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void SetupVideoPlayerForReplay()
+    {
+        videoPlayer.playOnAwake = false;
+        videoPlayer.isLooping = loop;
+        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+        videoPlayer.targetTexture = videoRenderTexture;
+        videoPlayer.waitForFirstFrame = true;
+    }
+
     private void OnPrepared(VideoPlayer vp)
     {
+        if (logLifecycle)
+        {
+            Debug.Log($"[DemoReplayer] Video prepared. frameCount={vp.frameCount}, frameRate={vp.frameRate}, playOnStart={playOnStart}");
+        }
+
         if (useFrameReadyEvent)
         {
             vp.sendFrameReadyEvents = true;
+            vp.frameReady -= OnFrameReady;
             vp.frameReady += OnFrameReady;
         }
 
-        vp.Play();
+        if (playOnStart)
+            StartPlayback();
+        else
+            vp.Pause();
     }
 
     private void Update()
     {
-        if (setCameraFeedTexture && videoRenderTexture != null)
-        {
-            Shader.SetGlobalTexture("_CameraFeedTex", videoRenderTexture);
-        }
-
-        if (useFrameReadyEvent)
-            return;
+        ApplyCameraFeedTexture();
+        EnsurePlaybackStarted();
 
         long currentFrame = videoPlayer.frame;
 
-        if (currentFrame < 0)
+        LogPlaybackProgress(currentFrame);
+
+        if (currentFrame < 0 || currentFrame == lastFrame)
             return;
 
-        if (currentFrame == lastFrame)
-            return;
-
-        lastFrame = currentFrame;
         DrawFrame((int)currentFrame);
     }
 
@@ -95,51 +149,114 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
 
     private void LoadJson()
     {
-        if (detectionJsonFile == null)
+        string json = LoadJsonText();
+
+        if (string.IsNullOrWhiteSpace(json))
         {
-            Debug.LogError("detectionJsonFile이 연결되지 않았습니다.");
+            Debug.LogError("[DemoReplayer] Detection JSON is empty or not found.");
             return;
         }
 
-        detectionJson = JsonUtility.FromJson<DemoDetectionJson>(detectionJsonFile.text);
+        detectionJson = JsonUtility.FromJson<DemoDetectionJson>(json);
 
-        frameMap = new Dictionary<int, DemoFrameJson>();
-
-        foreach (var frame in detectionJson.frames)
+        if (detectionJson == null || detectionJson.frames == null)
         {
-            frameMap[frame.frame] = frame;
+            Debug.LogError("[DemoReplayer] Failed to load detection JSON.");
+            return;
         }
 
-        Debug.Log($"JSON 로드 완료: frames={frameMap.Count}, video={detectionJson.videoFile}");
+        frameMap = new Dictionary<int, DemoFrameJson>();
+        int framesWithObjects = 0;
+
+        foreach (DemoFrameJson frame in detectionJson.frames)
+        {
+            frameMap[frame.frame] = frame;
+
+            if (frame.objects != null && frame.objects.Count > 0)
+            {
+                framesWithObjects++;
+            }
+        }
+
+        Debug.Log($"[DemoReplayer] JSON loaded. frames={frameMap.Count}, framesWithObjects={framesWithObjects}, video={detectionJson.videoFile}");
+    }
+
+    private string LoadJsonText()
+    {
+        if (!loadJsonFromStreamingAssets)
+        {
+            return detectionJsonFile != null ? detectionJsonFile.text : string.Empty;
+        }
+
+        string path = Path.Combine(Application.streamingAssetsPath, streamingAssetsJsonPath);
+
+        if (!File.Exists(path))
+        {
+            Debug.LogError($"[DemoReplayer] Detection JSON file not found: {path}");
+            return string.Empty;
+        }
+
+        return File.ReadAllText(path);
+    }
+
+    private void ApplyCameraFeedTexture()
+    {
+        if (!setCameraFeedTexture || videoRenderTexture == null)
+            return;
+
+        Shader.SetGlobalTexture(CameraFeedShaderIds.CameraFeedTex, videoRenderTexture);
+        Shader.SetGlobalFloat(CameraFeedShaderIds.CameraFeedAvailable, 1f);
     }
 
     private void DrawFrame(int frameIndex)
     {
-        if (polygonRenderer == null)
+        if (frameIndex == lastFrame)
             return;
 
-        if (frameMap == null)
+        lastFrame = frameIndex;
+
+        if (polygonRenderer == null || frameMap == null)
             return;
 
         DemoFrameJson frameData;
 
         if (frameMap.TryGetValue(frameIndex, out frameData))
         {
-            lastValidFrameData = frameData;
+            if (frameData.objects != null && frameData.objects.Count > 0)
+            {
+                lastValidFrameData = frameData;
+                lastValidFrameIndex = frameIndex;
+            }
         }
         else
         {
-            // processEveryNthFrame을 1보다 크게 했을 경우,
-            // 중간 프레임에서 폴리곤이 깜빡이지 않게 마지막 결과 유지
             frameData = lastValidFrameData;
         }
 
         polygonRenderer.ClearAll();
 
-        if (frameData == null || frameData.objects == null)
-            return;
+        if (frameData == null || frameData.objects == null || frameData.objects.Count == 0)
+        {
+            if (holdLastDetectionOnEmptyFrames &&
+                lastValidFrameData != null &&
+                lastValidFrameData.objects != null &&
+                frameIndex - lastValidFrameIndex <= maxHoldFrameGap)
+            {
+                frameData = lastValidFrameData;
+            }
+            else
+            {
+                if (logDrawStats && frameIndex % 30 == 0)
+                {
+                    Debug.Log($"[DemoReplayer] frame={frameIndex}, rawObjects=0, drawnObjects=0");
+                }
+
+                return;
+            }
+        }
 
         List<DemoObjectJson> objects = new List<DemoObjectJson>(frameData.objects);
+        int rawObjectCount = objects.Count;
 
         if (showOnlyHighPriority)
         {
@@ -171,13 +288,41 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
 
             for (int p = 0; p < obj.polygon.Count; p++)
             {
-                points[p] = new Vector2(
-                    obj.polygon[p].x,
-                    obj.polygon[p].y
-                );
+                points[p] = new Vector2(obj.polygon[p].x, obj.polygon[p].y);
             }
 
             polygonRenderer.ShowPolygon(i, points, Color.green);
         }
+
+        if (logDrawStats && objects.Count > 0)
+        {
+            Debug.Log($"[DemoReplayer] frame={frameIndex}, rawObjects={rawObjectCount}, drawnObjects={objects.Count}");
+        }
+    }
+
+    private void LogPlaybackProgress(long currentFrame)
+    {
+        if (!logDrawStats || Time.unscaledTime - lastPlaybackLogTime < 1f)
+            return;
+
+        lastPlaybackLogTime = Time.unscaledTime;
+        Debug.Log($"[DemoReplayer] playback isPlaying={videoPlayer.isPlaying}, frame={currentFrame}, time={videoPlayer.time:F2}");
+    }
+
+    private void StartPlayback()
+    {
+        playbackRequested = true;
+        videoPlayer.Play();
+    }
+
+    private void EnsurePlaybackStarted()
+    {
+        if (!playOnStart || !playbackRequested || videoPlayer.isPlaying)
+            return;
+
+        if (!videoPlayer.isPrepared)
+            return;
+
+        videoPlayer.Play();
     }
 }

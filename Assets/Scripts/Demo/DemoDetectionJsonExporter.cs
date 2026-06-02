@@ -20,44 +20,31 @@ public class DemoDetectionJsonExporter : MonoBehaviour
     [SerializeField] private int processEveryNthFrame = 1;
     [SerializeField] private int maxFrameCount = -1;
     [SerializeField] private bool setCameraFeedTexture = true;
+    [SerializeField] private bool exportOnStart = false;
 
     private DemoDetectionJson detectionJson;
-
     private bool frameReady;
     private long readyFrame;
 
     private IEnumerator Start()
     {
-        yield return ExportRoutine();
+        if (exportOnStart)
+        {
+            yield return ExportRoutine();
+        }
+    }
+
+    public void Export()
+    {
+        StartCoroutine(ExportRoutine());
     }
 
     private IEnumerator ExportRoutine()
     {
-        if (videoPlayer == null)
-        {
-            Debug.LogError("VideoPlayer가 연결되지 않았습니다.");
+        if (!ValidateReferences())
             yield break;
-        }
 
-        if (videoRenderTexture == null)
-        {
-            Debug.LogError("videoRenderTexture가 연결되지 않았습니다.");
-            yield break;
-        }
-
-        if (runYOLO == null)
-        {
-            Debug.LogError("RunYOLO가 연결되지 않았습니다.");
-            yield break;
-        }
-
-        videoPlayer.playOnAwake = false;
-        videoPlayer.isLooping = false;
-        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-        videoPlayer.targetTexture = videoRenderTexture;
-        videoPlayer.waitForFirstFrame = true;
-        videoPlayer.sendFrameReadyEvents = true;
-        videoPlayer.frameReady += OnFrameReady;
+        SetupVideoPlayerForExport();
 
         videoPlayer.Prepare();
 
@@ -66,10 +53,8 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
         videoPlayer.Pause();
 
-        int totalFrames = (int)videoPlayer.frameCount;
-
-        if (maxFrameCount > 0)
-            totalFrames = Mathf.Min(totalFrames, maxFrameCount);
+        int totalFrames = GetTotalFrameCount();
+        int step = Mathf.Max(1, processEveryNthFrame);
 
         detectionJson = new DemoDetectionJson
         {
@@ -80,52 +65,82 @@ public class DemoDetectionJsonExporter : MonoBehaviour
             frameCount = totalFrames
         };
 
-        Debug.Log($"JSON 생성 시작: frames={totalFrames}, fps={videoPlayer.frameRate}");
-
-        int step = Mathf.Max(1, processEveryNthFrame);
+        Debug.Log($"[DemoExporter] JSON export started. frames={totalFrames}, fps={videoPlayer.frameRate}");
 
         for (int frameIndex = 0; frameIndex < totalFrames; frameIndex += step)
         {
             yield return SeekFrame(frameIndex);
-
-            if (setCameraFeedTexture)
-            {
-                Shader.SetGlobalTexture("_CameraFeedTex", videoRenderTexture);
-            }
+            ApplyCameraFeedTexture();
 
             DemoFrameJson frameData = new DemoFrameJson
             {
                 frame = frameIndex
             };
 
-            bool inferenceDone = false;
-
             yield return StartCoroutine(runYOLO.ExecuteMLForJson(
                 videoRenderTexture,
-                objects =>
-                {
-                    frameData.objects = objects;
-                    inferenceDone = true;
-                },
+                objects => frameData.objects = objects,
                 Quaternion.identity
             ));
-
-            while (!inferenceDone)
-                yield return null;
 
             detectionJson.frames.Add(frameData);
 
             if (frameIndex % 30 == 0)
             {
-                Debug.Log($"JSON 생성 중: {frameIndex}/{totalFrames}, objects={frameData.objects.Count}");
+                Debug.Log($"[DemoExporter] frame={frameIndex}/{totalFrames}, objects={frameData.objects.Count}");
             }
         }
 
         SaveJson();
-
         videoPlayer.frameReady -= OnFrameReady;
+        Debug.Log("[DemoExporter] JSON export completed.");
+    }
 
-        Debug.Log("JSON 생성 완료");
+    private bool ValidateReferences()
+    {
+        if (videoPlayer == null)
+        {
+            Debug.LogError("[DemoExporter] VideoPlayer is not assigned.");
+            return false;
+        }
+
+        if (videoRenderTexture == null)
+        {
+            Debug.LogError("[DemoExporter] videoRenderTexture is not assigned.");
+            return false;
+        }
+
+        if (runYOLO == null)
+        {
+            Debug.LogError("[DemoExporter] RunYOLO is not assigned.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void SetupVideoPlayerForExport()
+    {
+        videoPlayer.playOnAwake = false;
+        videoPlayer.isLooping = false;
+        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+        videoPlayer.targetTexture = videoRenderTexture;
+        videoPlayer.waitForFirstFrame = true;
+        videoPlayer.sendFrameReadyEvents = true;
+        videoPlayer.frameReady -= OnFrameReady;
+        videoPlayer.frameReady += OnFrameReady;
+    }
+
+    private int GetTotalFrameCount()
+    {
+        int totalFrames = videoPlayer.frameCount > 0
+            ? (int)videoPlayer.frameCount
+            : Mathf.CeilToInt((float)(videoPlayer.length * videoPlayer.frameRate));
+
+        if (maxFrameCount > 0)
+            totalFrames = Mathf.Min(totalFrames, maxFrameCount);
+
+        return Mathf.Max(0, totalFrames);
     }
 
     private IEnumerator SeekFrame(int targetFrame)
@@ -135,8 +150,6 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
         videoPlayer.Pause();
         videoPlayer.frame = targetFrame;
-
-        // VideoPlayer가 해당 frame을 실제 RenderTexture에 올리도록 잠깐 재생
         videoPlayer.Play();
 
         int guard = 0;
@@ -149,7 +162,6 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
         videoPlayer.Pause();
 
-        // RenderTexture 반영 안정화
         yield return null;
         yield return new WaitForEndOfFrame();
     }
@@ -160,20 +172,27 @@ public class DemoDetectionJsonExporter : MonoBehaviour
         readyFrame = frameIdx;
     }
 
+    private void ApplyCameraFeedTexture()
+    {
+        if (!setCameraFeedTexture)
+            return;
+
+        Shader.SetGlobalTexture(CameraFeedShaderIds.CameraFeedTex, videoRenderTexture);
+        Shader.SetGlobalFloat(CameraFeedShaderIds.CameraFeedAvailable, 1f);
+    }
+
     private void SaveJson()
     {
         string json = JsonUtility.ToJson(detectionJson, true);
-
         string dir = Path.Combine(Application.dataPath, "StreamingAssets", folderName);
 
         if (!Directory.Exists(dir))
             Directory.CreateDirectory(dir);
 
         string path = Path.Combine(dir, outputFileName);
-
         File.WriteAllText(path, json);
 
-        Debug.Log($"JSON 저장 위치: {path}");
+        Debug.Log($"[DemoExporter] JSON saved: {path}");
     }
 
     private string GetVideoFileName()

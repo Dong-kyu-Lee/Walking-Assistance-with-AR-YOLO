@@ -107,8 +107,8 @@ public class VolumeKeyReceiver : MonoBehaviour
 #if UNITY_EDITOR
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.PageUp))   ZoomIn();
-        if (Input.GetKeyDown(KeyCode.PageDown)) ZoomOut();
+        /*if (Input.GetKeyDown(KeyCode.PageUp))   ZoomIn();
+        if (Input.GetKeyDown(KeyCode.PageDown)) ZoomOut();*/
     }
 #endif
 

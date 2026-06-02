@@ -3,7 +3,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Video;
 
-public class VideoFeedToRenderFeature : MonoBehaviour
+public class VideoFeedToRenderFeature : MonoBehaviour, ICameraFrameSource
 {
     [Header("Video Player")]
     [SerializeField] private VideoPlayer videoPlayer;
@@ -18,7 +18,8 @@ public class VideoFeedToRenderFeature : MonoBehaviour
     [SerializeField] private string cameraFeedTextureName = "_CameraFeedTex";
 
     [Header("Options")]
-    [SerializeField] private bool loop = true;
+    [SerializeField] private bool controlVideoPlayer = false;
+    [SerializeField] private bool loop = false;
     [SerializeField] private bool playOnStart = true;
     [SerializeField] private bool setGlobalTextureEveryFrame = true;
 
@@ -26,6 +27,11 @@ public class VideoFeedToRenderFeature : MonoBehaviour
     public RenderTexture InputRenderTexture => videoRenderTexture;
     public VideoPlayer Player => videoPlayer;
     public bool IsReady { get; private set; }
+
+    public Texture FrameTexture => videoRenderTexture;
+    public int FrameWidth => videoRenderTexture != null ? videoRenderTexture.width : 0;
+    public int FrameHeight => videoRenderTexture != null ? videoRenderTexture.height : 0;
+    public bool HasFrame => IsReady && videoRenderTexture != null && videoRenderTexture.width > 16 && videoRenderTexture.height > 16;
 
     private int cameraFeedTextureId;
 
@@ -35,42 +41,44 @@ public class VideoFeedToRenderFeature : MonoBehaviour
 
         if (videoPlayer == null)
         {
-            Debug.LogError("[VideoFeed] VideoPlayer가 연결되지 않았습니다.");
+            Debug.LogError("[VideoFeed] VideoPlayer is not assigned.");
             yield break;
         }
 
         if (videoRenderTexture == null)
         {
-            Debug.LogError("[VideoFeed] videoRenderTexture가 연결되지 않았습니다.");
+            Debug.LogError("[VideoFeed] videoRenderTexture is not assigned.");
             yield break;
         }
 
-        SetupVideoPlayer();
+        if (controlVideoPlayer)
+        {
+            SetupVideoPlayer();
 
-        videoPlayer.Prepare();
+            videoPlayer.Prepare();
 
-        while (!videoPlayer.isPrepared)
-            yield return null;
+            while (!videoPlayer.isPrepared)
+                yield return null;
+
+            if (playOnStart)
+            {
+                videoPlayer.Play();
+            }
+        }
 
         IsReady = true;
 
-        // 첫 프레임을 RenderTexture에 올리기 위해 재생 시작
-        if (playOnStart)
-            videoPlayer.Play();
-        else
-            videoPlayer.Pause();
-
-        // 핵심: RenderFeature가 읽는 전역 텍스처에 비디오 RT 연결
-        Shader.SetGlobalTexture(cameraFeedTextureId, videoRenderTexture);
+        ApplyGlobalCameraFeedTexture();
     }
 
     private void Update()
     {
-        if (!IsReady) return;
+        if (!IsReady)
+            return;
 
         if (setGlobalTextureEveryFrame)
         {
-            Shader.SetGlobalTexture(cameraFeedTextureId, videoRenderTexture);
+            ApplyGlobalCameraFeedTexture();
         }
     }
 
@@ -85,14 +93,7 @@ public class VideoFeedToRenderFeature : MonoBehaviour
         if (useStreamingAssets)
         {
             string path = Path.Combine(Application.streamingAssetsPath, videoFileName);
-
-#if UNITY_ANDROID && !UNITY_EDITOR
-            // Android StreamingAssets는 apk 내부 경로가 될 수 있음.
-            // VideoPlayer.url은 보통 Application.streamingAssetsPath 기반 경로로 사용 가능.
             videoPlayer.url = path;
-#else
-            videoPlayer.url = path;
-#endif
             videoPlayer.source = VideoSource.Url;
         }
         else
@@ -100,5 +101,11 @@ public class VideoFeedToRenderFeature : MonoBehaviour
             videoPlayer.source = VideoSource.VideoClip;
             videoPlayer.clip = videoClip;
         }
+    }
+
+    private void ApplyGlobalCameraFeedTexture()
+    {
+        Shader.SetGlobalTexture(cameraFeedTextureId, videoRenderTexture);
+        Shader.SetGlobalFloat(CameraFeedShaderIds.CameraFeedAvailable, 1f);
     }
 }

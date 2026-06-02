@@ -1072,6 +1072,7 @@ MonoBehaviour:
   processEveryNthFrame: 1
   maxFrameCount: -1
   setCameraFeedTexture: 1
+  exportOnStart: 0
 --- !u!4 &220610480
 Transform:
   m_ObjectHideFlags: 0
@@ -3000,6 +3001,127 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 648315480}
   m_CullTransparentMesh: 1
+--- !u!1 &673338767
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 673338771}
+  - component: {fileID: 673338770}
+  - component: {fileID: 673338769}
+  - component: {fileID: 673338768}
+  m_Layer: 0
+  m_Name: DemoVideoReplayer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &673338768
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 673338767}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f60309a05bbfc94fbda404066421ba8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VideoFeedToRenderFeature
+  videoPlayer: {fileID: 673338769}
+  videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
+  useStreamingAssets: 0
+  videoFileName: demo_input.mp4
+  videoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  cameraFeedTextureName: _CameraFeedTex
+  controlVideoPlayer: 0
+  loop: 0
+  playOnStart: 0
+  setGlobalTextureEveryFrame: 1
+--- !u!328 &673338769
+VideoPlayer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 673338767}
+  m_Enabled: 1
+  m_VideoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  m_TargetCameraAlpha: 1
+  m_TargetCamera3DLayout: 0
+  m_TargetCamera: {fileID: 0}
+  m_TargetTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
+  m_TimeReference: 0
+  m_TargetMaterialRenderer: {fileID: 0}
+  m_TargetMaterialProperty: <noninit>
+  m_RenderMode: 2
+  m_AspectRatio: 2
+  m_DataSource: 0
+  m_TimeUpdateMode: 2
+  m_PlaybackSpeed: 1
+  m_AudioOutputMode: 2
+  m_TargetAudioSources:
+  - {fileID: 0}
+  m_DirectAudioVolumes:
+  - 1
+  m_Url: 
+  m_EnabledAudioTracks: 01
+  m_DirectAudioMutes: 00
+  m_ControlledAudioTrackCount: 1
+  m_PlayOnAwake: 1
+  m_SkipOnDrop: 1
+  m_Looping: 0
+  m_WaitForFirstFrame: 1
+  m_FrameReadyEventEnabled: 0
+  m_VideoShaders: []
+--- !u!114 &673338770
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 673338767}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a4dd51b57b6d6d4da46afabda2b34c4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DemoDetectionJsonReplayer
+  videoPlayer: {fileID: 673338769}
+  videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
+  detectionJsonFile: {fileID: 0}
+  loadJsonFromStreamingAssets: 1
+  streamingAssetsJsonPath: Demo/demo_detections.json
+  polygonRenderer: {fileID: 794914124}
+  useFrameReadyEvent: 1
+  setCameraFeedTexture: 1
+  playOnStart: 1
+  loop: 0
+  showOnlyHighPriority: 0
+  minPriority: 70
+  maxObjectCount: 3
+  holdLastDetectionOnEmptyFrames: 1
+  maxHoldFrameGap: 10
+  logLifecycle: 1
+  logDrawStats: 1
+--- !u!4 &673338771
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 673338767}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &704524786
 GameObject:
   m_ObjectHideFlags: 0
@@ -3514,8 +3636,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraFeedRenderBridge
   frameSourceBehaviour: {fileID: 794914119}
   flipY: 1
-  feedSourceMode: 0
-  videoFeed: {fileID: 0}
+  flipDemoVideoY: 0
+  useAspectCrop: 1
+  aspectTarget: 0
+  feedSourceMode: 1
+  videoFeed: {fileID: 673338768}
 --- !u!114 &794914123
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5790,6 +5915,96 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &1316161316
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1316161317}
+  - component: {fileID: 1316161319}
+  - component: {fileID: 1316161318}
+  m_Layer: 0
+  m_Name: DemoVideoExporter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1316161317
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1316161316}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1316161318
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1316161316}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11a3b307484a2f948b9543278633af70, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DemoDetectionJsonExporter
+  videoPlayer: {fileID: 1316161319}
+  videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
+  runYOLO: {fileID: 794914120}
+  folderName: Demo
+  outputFileName: demo_detections.json
+  processEveryNthFrame: 1
+  maxFrameCount: -1
+  setCameraFeedTexture: 1
+  exportOnStart: 0
+--- !u!328 &1316161319
+VideoPlayer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1316161316}
+  m_Enabled: 1
+  m_VideoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  m_TargetCameraAlpha: 1
+  m_TargetCamera3DLayout: 0
+  m_TargetCamera: {fileID: 0}
+  m_TargetTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
+  m_TimeReference: 0
+  m_TargetMaterialRenderer: {fileID: 0}
+  m_TargetMaterialProperty: <noninit>
+  m_RenderMode: 2
+  m_AspectRatio: 2
+  m_DataSource: 0
+  m_TimeUpdateMode: 2
+  m_PlaybackSpeed: 1
+  m_AudioOutputMode: 2
+  m_TargetAudioSources:
+  - {fileID: 0}
+  m_DirectAudioVolumes:
+  - 1
+  m_Url: 
+  m_EnabledAudioTracks: 01
+  m_DirectAudioMutes: 00
+  m_ControlledAudioTrackCount: 1
+  m_PlayOnAwake: 0
+  m_SkipOnDrop: 1
+  m_Looping: 0
+  m_WaitForFirstFrame: 1
+  m_FrameReadyEventEnabled: 0
+  m_VideoShaders: []
 --- !u!1 &1335911669
 GameObject:
   m_ObjectHideFlags: 0
@@ -8191,3 +8406,5 @@ SceneRoots:
   - {fileID: 599395656}
   - {fileID: 1885939571}
   - {fileID: 220610480}
+  - {fileID: 1316161317}
+  - {fileID: 673338771}
