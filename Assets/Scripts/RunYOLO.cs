@@ -71,6 +71,9 @@ public class RunYOLO : MonoBehaviour
 
     [SerializeField] private AndroidTTS androidTTS;
 
+    [Header("Demo JSON Export")]
+    [SerializeField] private bool filterJsonObjectsByDistance = true;
+
     [Tooltip("거리 측정된 물체 중 폴리곤을 표시할 최대 개수 (가까운 순)")]
     [SerializeField] private int nearestPolygonCount = 3;
 
@@ -198,7 +201,14 @@ public class RunYOLO : MonoBehaviour
             if (groundPlaneDistanceEstimator != null)
             {
                 Debug.Log("거리 정보 처리 시작");
-                groundPlaneDistanceEstimator.Process(resultBoxes, labels, imageWidth);
+                groundPlaneDistanceEstimator.Process(
+                    resultBoxes,
+                    labels,
+                    imageWidth,
+                    imageHeight,
+                    sourceTexture != null ? sourceTexture.width : 0,
+                    sourceTexture != null ? sourceTexture.height : 0
+                );
             }
 
             if (polygonRenderer != null)
@@ -378,7 +388,14 @@ public class RunYOLO : MonoBehaviour
 
             if (groundPlaneDistanceEstimator != null)
             {
-                groundPlaneDistanceEstimator.Process(resultBoxes, labels, imageWidth);
+                groundPlaneDistanceEstimator.Process(
+                    resultBoxes,
+                    labels,
+                    imageWidth,
+                    imageHeight,
+                    sourceTexture != null ? sourceTexture.width : 0,
+                    sourceTexture != null ? sourceTexture.height : 0
+                );
             }
 
             if (drawPolygon && polygonRenderer != null)
@@ -388,12 +405,14 @@ public class RunYOLO : MonoBehaviour
 
             int numBoxes = math.min(resultBoxes.Length, 200);
 
-            HashSet<int> polygonShowIndices = BuildPolygonShowSet(
-                resultBoxes,
-                groundPlaneDistanceEstimator != null ? groundPlaneDistanceEstimator.GetLastResults() : null,
-                labels,
-                numBoxes
-            );
+            HashSet<int> polygonShowIndices = !drawPolygon && !filterJsonObjectsByDistance
+                ? BuildAllObjectSet(numBoxes)
+                : BuildPolygonShowSet(
+                    resultBoxes,
+                    groundPlaneDistanceEstimator != null ? groundPlaneDistanceEstimator.GetLastResults() : null,
+                    labels,
+                    numBoxes
+                );
 
             if (numBoxes > 0)
             {
@@ -599,6 +618,18 @@ public class RunYOLO : MonoBehaviour
         int take = math.min(math.max(nearestPolygonCount, 0), measured.Count);
         for (int i = 0; i < take; i++)
             showSet.Add(measured[i].idx);
+
+        return showSet;
+    }
+
+    private HashSet<int> BuildAllObjectSet(int numBoxes)
+    {
+        var showSet = new HashSet<int>();
+
+        for (int i = 0; i < numBoxes; i++)
+        {
+            showSet.Add(i);
+        }
 
         return showSet;
     }

@@ -1031,10 +1031,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GroundPlaneDistanceEstimator
   cameraHeightMeters: 1.7
-  useGyro: 1
+  useGyro: 0
   manualPitchDownDegrees: 10
   fallbackVerticalFovDegrees: 45
   accelFilterAlpha: 0.1
+  useDemoVideoReference: 1
+  useDemoManualPitch: 1
+  demoPitchDownDegrees: 10
+  overrideDemoVerticalFov: 1
+  demoVerticalFovDegrees: 45
+  fallbackDemoVideoHeight: 1080
+  logDistanceDebug: 0
 --- !u!1 &220610478
 GameObject:
   m_ObjectHideFlags: 0
@@ -1073,6 +1080,7 @@ MonoBehaviour:
   maxFrameCount: -1
   setCameraFeedTexture: 1
   exportOnStart: 0
+  pauseOtherPlaybackDuringExport: 1
 --- !u!4 &220610480
 Transform:
   m_ObjectHideFlags: 0
@@ -3036,9 +3044,9 @@ MonoBehaviour:
   videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
   useStreamingAssets: 0
   videoFileName: demo_input.mp4
-  videoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
+  videoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
   cameraFeedTextureName: _CameraFeedTex
-  controlVideoPlayer: 0
+  controlVideoPlayer: 1
   loop: 0
   playOnStart: 1
   setGlobalTextureEveryFrame: 1
@@ -3050,7 +3058,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 673338767}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}
@@ -3100,8 +3108,7 @@ MonoBehaviour:
   setCameraFeedTexture: 1
   playOnStart: 1
   loop: 0
-  drawPolygons: 1
-  showOnlyHighPriority: 1
+  showOnlyHighPriority: 0
   minPriority: 70
   maxObjectCount: 3
   holdLastDetectionOnEmptyFrames: 1
@@ -3565,6 +3572,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraXYOLOInput
   yoloProcessor: {fileID: 794914120}
+  cameraFeedRenderBridge: {fileID: 0}
+  disableInferenceInDemoVideoMode: 1
   permissionRequester: {fileID: 794914121}
   useRawImagePreview: 0
   displayImage: {fileID: 1224465184}
@@ -3610,6 +3619,7 @@ MonoBehaviour:
   detectionOverlayRoot: {fileID: 1124447614}
   groundPlaneDistanceEstimator: {fileID: 208641308}
   androidTTS: {fileID: 1238605812}
+  filterJsonObjectsByDistance: 0
   nearestPolygonCount: 3
   cameraFovH: 70
 --- !u!114 &794914121
@@ -5972,6 +5982,7 @@ MonoBehaviour:
   maxFrameCount: -1
   setCameraFeedTexture: 1
   exportOnStart: 0
+  pauseOtherPlaybackDuringExport: 1
 --- !u!328 &1316161319
 VideoPlayer:
   m_ObjectHideFlags: 0
@@ -5980,7 +5991,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1316161316}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}

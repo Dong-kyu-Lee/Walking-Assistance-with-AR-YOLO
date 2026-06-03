@@ -116,7 +116,7 @@ public class DistanceDisplayUI : MonoBehaviour
         {
             Debug.Log($"Label : {r.label} , Distance : {r.distanceMeters:F1} m");
 
-            if (!r.isMeasured || r.distanceMeters <= 0f) continue;
+            //if (!r.isMeasured || r.distanceMeters <= 0f) continue;
 
             if (r.distanceMeters < nearestDist)
             {

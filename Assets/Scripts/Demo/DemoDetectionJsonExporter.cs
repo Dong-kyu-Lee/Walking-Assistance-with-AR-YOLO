@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Video;
@@ -21,10 +22,14 @@ public class DemoDetectionJsonExporter : MonoBehaviour
     [SerializeField] private int maxFrameCount = -1;
     [SerializeField] private bool setCameraFeedTexture = true;
     [SerializeField] private bool exportOnStart = false;
+    [SerializeField] private bool pauseOtherPlaybackDuringExport = true;
 
     private DemoDetectionJson detectionJson;
     private bool frameReady;
     private long readyFrame;
+    private bool isExporting;
+    private readonly List<DemoDetectionJsonReplayer> disabledReplayers = new();
+    private readonly List<VideoPlayer> pausedVideoPlayers = new();
 
     private IEnumerator Start()
     {
@@ -36,6 +41,12 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
     public void Export()
     {
+        if (isExporting)
+        {
+            Debug.LogWarning("[DemoExporter] Export is already running.");
+            return;
+        }
+
         StartCoroutine(ExportRoutine());
     }
 
@@ -44,6 +55,8 @@ public class DemoDetectionJsonExporter : MonoBehaviour
         if (!ValidateReferences())
             yield break;
 
+        isExporting = true;
+        BeginExportIsolation();
         SetupVideoPlayerForExport();
 
         videoPlayer.Prepare();
@@ -93,6 +106,8 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
         SaveJson();
         videoPlayer.frameReady -= OnFrameReady;
+        EndExportIsolation();
+        isExporting = false;
         Debug.Log("[DemoExporter] JSON export completed.");
     }
 
@@ -126,6 +141,7 @@ public class DemoDetectionJsonExporter : MonoBehaviour
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
         videoPlayer.targetTexture = videoRenderTexture;
         videoPlayer.waitForFirstFrame = true;
+        videoPlayer.skipOnDrop = false;
         videoPlayer.sendFrameReadyEvents = true;
         videoPlayer.frameReady -= OnFrameReady;
         videoPlayer.frameReady += OnFrameReady;
@@ -154,7 +170,9 @@ public class DemoDetectionJsonExporter : MonoBehaviour
 
         int guard = 0;
 
-        while ((!frameReady || readyFrame != targetFrame) && guard < 120)
+        while ((!frameReady || readyFrame < targetFrame) &&
+               videoPlayer.frame < targetFrame &&
+               guard < 120)
         {
             guard++;
             yield return null;
@@ -204,5 +222,57 @@ public class DemoDetectionJsonExporter : MonoBehaviour
             return Path.GetFileName(videoPlayer.url);
 
         return "unknown_video";
+    }
+
+    private void BeginExportIsolation()
+    {
+        disabledReplayers.Clear();
+        pausedVideoPlayers.Clear();
+
+        if (!pauseOtherPlaybackDuringExport)
+            return;
+
+        DemoDetectionJsonReplayer[] replayers =
+            FindObjectsByType<DemoDetectionJsonReplayer>(FindObjectsSortMode.None);
+
+        foreach (DemoDetectionJsonReplayer replayer in replayers)
+        {
+            if (replayer == null || !replayer.enabled)
+                continue;
+
+            replayer.enabled = false;
+            disabledReplayers.Add(replayer);
+        }
+
+        VideoPlayer[] players = FindObjectsByType<VideoPlayer>(FindObjectsSortMode.None);
+
+        foreach (VideoPlayer player in players)
+        {
+            if (player == null || player == videoPlayer)
+                continue;
+
+            if (player.targetTexture != videoRenderTexture)
+                continue;
+
+            if (player.isPlaying)
+            {
+                player.Pause();
+                pausedVideoPlayers.Add(player);
+            }
+        }
+    }
+
+    private void EndExportIsolation()
+    {
+        foreach (DemoDetectionJsonReplayer replayer in disabledReplayers)
+        {
+            if (replayer != null)
+            {
+                replayer.enabled = true;
+            }
+        }
+
+        disabledReplayers.Clear();
+        pausedVideoPlayers.Clear();
     }
 }
