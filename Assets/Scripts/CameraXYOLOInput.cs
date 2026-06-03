@@ -10,6 +10,8 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     [Header("YOLO Reference")]
     public RunYOLO yoloProcessor;
     public bool IsOutlineMode { get; private set; }
+    [SerializeField] private CameraFeedRenderBridge cameraFeedRenderBridge;
+    [SerializeField] private bool disableInferenceInDemoVideoMode = true;
 
     [Header("Permission")]
     [SerializeField] private CameraPermissionRequester permissionRequester;
@@ -89,9 +91,23 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     private static readonly ProfilerMarker MarkerTextureUpload =
         new ProfilerMarker("CameraX.TextureUpload");
 
+    private void Awake()
+    {
+        if (cameraFeedRenderBridge == null)
+        {
+            cameraFeedRenderBridge = GetComponent<CameraFeedRenderBridge>();
+        }
+    }
+
     private IEnumerator Start()
     {
         Input.gyro.enabled = true;
+
+        if (IsDemoVideoMode())
+        {
+            isAppReady = true;
+            yield break;
+        }
 
         if (Application.platform != RuntimePlatform.Android)
         {
@@ -263,6 +279,9 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
     }
     private void Update()
     {
+        if (IsDemoVideoMode())
+            return;
+
         if (cameraController == null)
             return;
 
@@ -275,6 +294,9 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         }
 
         if (IsOutlineMode == false) return;
+
+        if (IsInferenceDisabledByDemoVideo())
+            return;
 
         if (useBootWarmup &&
             !bootSequenceStarted &&
@@ -290,7 +312,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         if (!isAppReady)
             return;
 
-        if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
+        if (!IsInferenceDisabledByDemoVideo() &&
+            yoloProcessor != null &&
+            yoloProcessor.IsModelLoaded &&
+            cameraTexture != null)
         {
             // inferenceInterval 없이 이전 추론 완료 즉시 다음 추론 시작
             if (!isProcessing)
@@ -315,7 +340,10 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         yield return new WaitForSeconds(0.2f);
 
         // 더미 추론 1회 실행
-        if (yoloProcessor != null && yoloProcessor.IsModelLoaded && cameraTexture != null)
+        if (!IsInferenceDisabledByDemoVideo() &&
+            yoloProcessor != null &&
+            yoloProcessor.IsModelLoaded &&
+            cameraTexture != null)
         {
             isProcessing = true;
 
@@ -404,10 +432,16 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
 
     private IEnumerator RunInference()
     {
+        if (IsInferenceDisabledByDemoVideo())
+            yield break;
+
         isProcessing = true;
         // 추론 시작 시점의 카메라 자세 저장 (카메라 이동 보정용)
         Quaternion captureAttitude = Input.gyro.enabled ? Input.gyro.attitude : Quaternion.identity;
-        yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture, captureAttitude));
+        if (!IsInferenceDisabledByDemoVideo())
+        {
+            yield return StartCoroutine(yoloProcessor.ExecuteML(cameraTexture, captureAttitude));
+        }
         isProcessing = false;
     }
 
@@ -479,5 +513,17 @@ public class CameraXYOLOInput : MonoBehaviour, ICameraFrameSource
         {
             yoloProcessor.ClearAnnotations();
         }
+    }
+
+    private bool IsInferenceDisabledByDemoVideo()
+    {
+        return disableInferenceInDemoVideoMode &&
+               IsDemoVideoMode();
+    }
+
+    private bool IsDemoVideoMode()
+    {
+        return cameraFeedRenderBridge != null &&
+               cameraFeedRenderBridge.IsDemoVideoMode;
     }
 }

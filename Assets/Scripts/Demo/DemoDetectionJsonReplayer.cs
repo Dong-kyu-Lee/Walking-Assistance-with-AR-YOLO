@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.Video;
 
 public class DemoDetectionJsonReplayer : MonoBehaviour
@@ -18,7 +20,7 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
     [SerializeField] private PolygonOverlayTextureRenderer polygonRenderer;
 
     [Header("Options")]
-    [SerializeField] private bool useFrameReadyEvent = true;
+    [SerializeField] private bool useFrameReadyEvent = false;
     [SerializeField] private bool setCameraFeedTexture = true;
     [SerializeField] private bool playOnStart = true;
     [SerializeField] private bool loop = false;
@@ -28,7 +30,7 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
     [SerializeField] private bool holdLastDetectionOnEmptyFrames = true;
     [SerializeField] private int maxHoldFrameGap = 10;
     [SerializeField] private bool logLifecycle = true;
-    [SerializeField] private bool logDrawStats = true;
+    [SerializeField] private bool logDrawStats = false;
 
     private DemoDetectionJson detectionJson;
     private Dictionary<int, DemoFrameJson> frameMap;
@@ -38,7 +40,7 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
     private float lastPlaybackLogTime = -1f;
     private bool playbackRequested;
 
-    private void Start()
+    private IEnumerator Start()
     {
         if (logLifecycle)
         {
@@ -46,12 +48,12 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         }
 
         if (!ValidateReferences())
-            return;
+            yield break;
 
-        LoadJson();
+        yield return LoadJson();
 
         if (frameMap == null)
-            return;
+            yield break;
 
         SetupVideoPlayerForReplay();
         ApplyCameraFeedTexture();
@@ -105,6 +107,7 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
         videoPlayer.targetTexture = videoRenderTexture;
         videoPlayer.waitForFirstFrame = true;
+        videoPlayer.sendFrameReadyEvents = false;
     }
 
     private void OnPrepared(VideoPlayer vp)
@@ -147,14 +150,15 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         DrawFrame((int)frameIdx);
     }
 
-    private void LoadJson()
+    private IEnumerator LoadJson()
     {
-        string json = LoadJsonText();
+        string json = string.Empty;
+        yield return LoadJsonText(text => json = text);
 
         if (string.IsNullOrWhiteSpace(json))
         {
             Debug.LogError("[DemoReplayer] Detection JSON is empty or not found.");
-            return;
+            yield break;
         }
 
         detectionJson = JsonUtility.FromJson<DemoDetectionJson>(json);
@@ -162,7 +166,7 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         if (detectionJson == null || detectionJson.frames == null)
         {
             Debug.LogError("[DemoReplayer] Failed to load detection JSON.");
-            return;
+            yield break;
         }
 
         frameMap = new Dictionary<int, DemoFrameJson>();
@@ -181,22 +185,42 @@ public class DemoDetectionJsonReplayer : MonoBehaviour
         Debug.Log($"[DemoReplayer] JSON loaded. frames={frameMap.Count}, framesWithObjects={framesWithObjects}, video={detectionJson.videoFile}");
     }
 
-    private string LoadJsonText()
+    private IEnumerator LoadJsonText(System.Action<string> onLoaded)
     {
         if (!loadJsonFromStreamingAssets)
         {
-            return detectionJsonFile != null ? detectionJsonFile.text : string.Empty;
+            onLoaded?.Invoke(detectionJsonFile != null ? detectionJsonFile.text : string.Empty);
+            yield break;
         }
 
         string path = Path.Combine(Application.streamingAssetsPath, streamingAssetsJsonPath);
 
+        if (path.Contains("://") || path.Contains("jar:"))
+        {
+            using (UnityWebRequest request = UnityWebRequest.Get(path))
+            {
+                yield return request.SendWebRequest();
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError($"[DemoReplayer] Detection JSON file not found: {path}, error={request.error}");
+                    onLoaded?.Invoke(string.Empty);
+                    yield break;
+                }
+
+                onLoaded?.Invoke(request.downloadHandler.text);
+                yield break;
+            }
+        }
+
         if (!File.Exists(path))
         {
             Debug.LogError($"[DemoReplayer] Detection JSON file not found: {path}");
-            return string.Empty;
+            onLoaded?.Invoke(string.Empty);
+            yield break;
         }
 
-        return File.ReadAllText(path);
+        onLoaded?.Invoke(File.ReadAllText(path));
     }
 
     private void ApplyCameraFeedTexture()

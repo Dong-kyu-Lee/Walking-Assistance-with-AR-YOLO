@@ -3036,11 +3036,11 @@ MonoBehaviour:
   videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
   useStreamingAssets: 0
   videoFileName: demo_input.mp4
-  videoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  videoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
   cameraFeedTextureName: _CameraFeedTex
   controlVideoPlayer: 0
   loop: 0
-  playOnStart: 0
+  playOnStart: 1
   setGlobalTextureEveryFrame: 1
 --- !u!328 &673338769
 VideoPlayer:
@@ -3050,7 +3050,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 673338767}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}
@@ -3072,7 +3072,7 @@ VideoPlayer:
   m_EnabledAudioTracks: 01
   m_DirectAudioMutes: 00
   m_ControlledAudioTrackCount: 1
-  m_PlayOnAwake: 1
+  m_PlayOnAwake: 0
   m_SkipOnDrop: 1
   m_Looping: 0
   m_WaitForFirstFrame: 1
@@ -3096,17 +3096,18 @@ MonoBehaviour:
   loadJsonFromStreamingAssets: 1
   streamingAssetsJsonPath: Demo/demo_detections.json
   polygonRenderer: {fileID: 794914124}
-  useFrameReadyEvent: 1
+  useFrameReadyEvent: 0
   setCameraFeedTexture: 1
   playOnStart: 1
   loop: 0
-  showOnlyHighPriority: 0
+  drawPolygons: 1
+  showOnlyHighPriority: 1
   minPriority: 70
   maxObjectCount: 3
   holdLastDetectionOnEmptyFrames: 1
   maxHoldFrameGap: 10
   logLifecycle: 1
-  logDrawStats: 1
+  logDrawStats: 0
 --- !u!4 &673338771
 Transform:
   m_ObjectHideFlags: 0
@@ -3603,6 +3604,7 @@ MonoBehaviour:
   videoFilename: giraffes.mp4
   isARMode: 0
   polygonRenderer: {fileID: 794914124}
+  drawPolygonOverlay: 1
   iouThreshold: 0.5
   scoreThreshold: 0.5
   detectionOverlayRoot: {fileID: 1124447614}
@@ -3656,7 +3658,7 @@ MonoBehaviour:
   viewScale: 1
   viewCenter: {x: 0.5, y: 0.5}
   backgroundColor: {r: 0, g: 0, b: 0, a: 1}
-  contrast: 1
+  contrast: 1.3
   brightness: 0
   saturation: 1
   grayscaleAmount: 0
@@ -3675,6 +3677,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PolygonOverlayRenderer
   lineMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   lineThicknessPx: 5
+  overlayEnabled: 1
 --- !u!1 &826989844
 GameObject:
   m_ObjectHideFlags: 0
@@ -5977,7 +5980,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1316161316}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 02d3c4396e26da04983fc667a703c4a2, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 3f70a80c21607ee4490717bffcd6e9ba, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}

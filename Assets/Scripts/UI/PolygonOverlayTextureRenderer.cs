@@ -5,6 +5,7 @@ public class PolygonOverlayTextureRenderer : MonoBehaviour
 {
     [SerializeField] private Material lineMaterial;
     [SerializeField, Min(1)] private int lineThicknessPx = 3;
+    [SerializeField] private bool overlayEnabled = true;
 
     private RenderTexture overlayRT;
     private Mesh overlayMesh;
@@ -15,6 +16,9 @@ public class PolygonOverlayTextureRenderer : MonoBehaviour
     private readonly List<Color>   _colors = new List<Color>(4096);
 
     private readonly List<(Vector2[] points, Color color)> pendingPolygons = new();
+    private bool isDirty = true;
+
+    public bool OverlayEnabled => overlayEnabled;
 
     void Start()
     {
@@ -28,15 +32,64 @@ public class PolygonOverlayTextureRenderer : MonoBehaviour
         overlayMesh.MarkDynamic(); // 매 프레임 갱신됨을 GPU에 알림
     }
 
-    public void ClearAll()  => pendingPolygons.Clear();
+    public void ClearAll()
+    {
+        if (pendingPolygons.Count == 0)
+            return;
+
+        pendingPolygons.Clear();
+        isDirty = true;
+    }
+
+    public void SetOverlayEnabled(bool enabled)
+    {
+        if (overlayEnabled == enabled)
+            return;
+
+        overlayEnabled = enabled;
+
+        if (!overlayEnabled)
+        {
+            pendingPolygons.Clear();
+            ClearOutputTexture();
+            isDirty = false;
+            return;
+        }
+
+        isDirty = true;
+    }
+
+    public void ToggleOverlayEnabled()
+    {
+        SetOverlayEnabled(!overlayEnabled);
+    }
 
     public void ShowPolygon(int id, Vector2[] normalizedPoints, Color color)
-        => pendingPolygons.Add((normalizedPoints, color));
+    {
+        if (!overlayEnabled)
+            return;
 
-    void LateUpdate() => DrawToTexture();
+        pendingPolygons.Add((normalizedPoints, color));
+        isDirty = true;
+    }
+
+    void LateUpdate()
+    {
+        if (!isDirty)
+            return;
+
+        DrawToTexture();
+        isDirty = false;
+    }
 
     void DrawToTexture()
     {
+        if (!overlayEnabled)
+        {
+            ClearOutputTexture();
+            return;
+        }
+
         if (pendingPolygons.Count == 0)
         {
             Shader.SetGlobalFloat("_PolygonOverlayAvailable", 0f);
@@ -108,6 +161,19 @@ public class PolygonOverlayTextureRenderer : MonoBehaviour
 
         RenderTexture.active = prev;
         Shader.SetGlobalFloat("_PolygonOverlayAvailable", 1f);
+    }
+
+    private void ClearOutputTexture()
+    {
+        Shader.SetGlobalFloat("_PolygonOverlayAvailable", 0f);
+
+        if (overlayRT == null)
+            return;
+
+        var prev = RenderTexture.active;
+        RenderTexture.active = overlayRT;
+        GL.Clear(true, true, Color.clear);
+        RenderTexture.active = prev;
     }
 
     void OnDestroy()

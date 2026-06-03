@@ -32,6 +32,9 @@ public class CameraFeedRenderBridge : MonoBehaviour
 
     private ICameraFrameSource frameSource;
 
+    public FeedSourceMode CurrentFeedSourceMode => feedSourceMode;
+    public bool IsDemoVideoMode => feedSourceMode == FeedSourceMode.DemoVideo;
+
     private void Awake()
     {
         frameSource = frameSourceBehaviour as ICameraFrameSource;
@@ -101,6 +104,7 @@ public class CameraFeedRenderBridge : MonoBehaviour
         if (feedSourceMode == FeedSourceMode.DemoVideo)
         {
             Shader.SetGlobalFloat(CameraFeedShaderIds.UseXRUv, 1f);
+            Shader.SetGlobalFloat(CameraFeedShaderIds.XRCameraFeedFlipY, 0f);
         }
     }
 

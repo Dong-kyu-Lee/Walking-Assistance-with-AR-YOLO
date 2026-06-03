@@ -54,6 +54,8 @@ public class RunYOLO : MonoBehaviour
     [Tooltip("Drag the PolygonOverlayRenderer component here")]
     [SerializeField] private PolygonOverlayTextureRenderer polygonRenderer;
 
+    [SerializeField] private bool drawPolygonOverlay = true;
+
     [Tooltip("Intersection over union threshold used for non-maximum suppression")]
     [SerializeField, Range(0, 1)]
     float iouThreshold = 0.45f;
@@ -102,6 +104,11 @@ public class RunYOLO : MonoBehaviour
 
         displayLocation = displayImage.transform;
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
+
+        if (polygonRenderer != null)
+        {
+            polygonRenderer.SetOverlayEnabled(drawPolygonOverlay);
+        }
 
         isModelLoaded = true;
     }
@@ -194,7 +201,15 @@ public class RunYOLO : MonoBehaviour
                 groundPlaneDistanceEstimator.Process(resultBoxes, labels, imageWidth);
             }
 
-            polygonRenderer.ClearAll();
+            if (polygonRenderer != null)
+            {
+                polygonRenderer.SetOverlayEnabled(drawPolygonOverlay);
+            }
+
+            if (drawPolygonOverlay && polygonRenderer != null)
+            {
+                polygonRenderer.ClearAll();
+            }
 
             int numBoxes = math.min(resultBoxes.Length, 200);
             // 폴리곤 출력할 박스 인덱스 집합 계산
@@ -250,7 +265,10 @@ public class RunYOLO : MonoBehaviour
                             canvasPoints[p] = CompensateRotation(normalized, rotDelta, cameraAspect);
                         }
 
-                        polygonRenderer.ShowPolygon(i, canvasPoints, Color.green);
+                        if (drawPolygonOverlay && polygonRenderer != null)
+                        {
+                            polygonRenderer.ShowPolygon(i, canvasPoints, Color.green);
+                        }
                     }
                 }
                 finally
@@ -516,6 +534,21 @@ public class RunYOLO : MonoBehaviour
     public void ClearAnnotations()
     {
         polygonRenderer.ClearAll();
+    }
+
+    public void SetPolygonOutputEnabled(bool enabled)
+    {
+        drawPolygonOverlay = enabled;
+
+        if (polygonRenderer != null)
+        {
+            polygonRenderer.SetOverlayEnabled(enabled);
+        }
+    }
+
+    public void TogglePolygonOutput()
+    {
+        SetPolygonOutputEnabled(!drawPolygonOverlay);
     }
 
     public void GetObstacleDetectedVoice(string className)

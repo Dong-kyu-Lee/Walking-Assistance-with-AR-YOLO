@@ -21,12 +21,12 @@ public class CameraFeedViewModeController : MonoBehaviour
     public int ScreenSizeIndex { get; private set; } = 0;
 
     [Header("High Contrast Settings")]
-    [SerializeField] private float contrast = 1.0f;
+    [SerializeField] private float contrast = 1.3f;
     [SerializeField] private float brightness = 0.0f;
     [SerializeField] private float saturation = 1.0f;
     [SerializeField] private float grayscaleAmount = 0.0f;
 
-    public int HighContrastIndex { get; private set; } = 0;
+    public int HighContrastIndex { get; private set; } = 1;
 
     [Header("Detection Overlay")]
     [SerializeField] private RectTransform detectionOverlayRoot;
