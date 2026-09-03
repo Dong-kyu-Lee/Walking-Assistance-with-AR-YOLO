@@ -3044,7 +3044,7 @@ MonoBehaviour:
   videoRenderTexture: {fileID: 8400000, guid: 2f67fca40d17de948b4cee01db918c3b, type: 2}
   useStreamingAssets: 0
   videoFileName: demo_input.mp4
-  videoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
+  videoClip: {fileID: 32900000, guid: 9a8160dd602d10f4d9558f4daf795120, type: 3}
   cameraFeedTextureName: _CameraFeedTex
   controlVideoPlayer: 1
   loop: 0
@@ -3058,7 +3058,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 673338767}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 9a8160dd602d10f4d9558f4daf795120, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}
@@ -3620,6 +3620,17 @@ MonoBehaviour:
   groundPlaneDistanceEstimator: {fileID: 208641308}
   androidTTS: {fileID: 1238605812}
   filterJsonObjectsByDistance: 0
+  useHighDetailDemoPolygonExport: 1
+  demoMaskResolution: 320
+  limitDemoPolygonPoints: 0
+  maxDemoPolygonPoints: 256
+  yoloInputPreprocessShader: {fileID: 4800000, guid: 8c1d1f0eb8f048848b7f4f6737b7c0d2, type: 3}
+  yoloInputAspectMode: 0
+  flipYForYoloInput: 1
+  useDemoYoloInputTransform: 1
+  demoYoloInputRotation: 0
+  flipDemoYoloInputX: 0
+  flipDemoYoloInputY: 0
   nearestPolygonCount: 3
   cameraFovH: 70
 --- !u!114 &794914121
@@ -4707,7 +4718,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: LOADING...
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
   m_sharedMaterial: {fileID: -2685998455979005849, guid: 6b2617402c1d29742b10791f3569ef0e, type: 2}
@@ -5480,7 +5491,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 0, g: 0, b: 0, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -5991,7 +6002,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1316161316}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: da68248c8e190994f9543eedb716eb2b, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 9a8160dd602d10f4d9558f4daf795120, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}

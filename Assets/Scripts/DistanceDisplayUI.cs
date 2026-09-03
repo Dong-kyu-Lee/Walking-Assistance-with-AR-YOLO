@@ -141,7 +141,7 @@ public class DistanceDisplayUI : MonoBehaviour
             float distance = vehicleInRange ? nearestVehicleDist : nearestDist;
             string korean = LabelKorean.TryGetValue(target.label, out string k) ? k : target.label;
             string direction = HorizontalDirection(target.box.cx);
-            androidTTS.Speak($"{direction} {Mathf.Round(distance * 10f) / 10f}미터 {korean}");
+            androidTTS.Speak($"{direction} {korean}");
         }
 
         groundPlaneDistanceEstimator.ClearResults();

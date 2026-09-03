@@ -9,6 +9,21 @@ using Unity.Collections;
 using Unity.Burst;
 using Unity.Mathematics;
 
+public enum YoloInputAspectMode
+{
+    Stretch,
+    CenterCrop,
+    FitWithPadding
+}
+
+public enum YoloInputRotation
+{
+    None,
+    Rotate90Clockwise,
+    Rotate180,
+    Rotate90CounterClockwise
+}
+
 public class RunYOLO : MonoBehaviour
 {
     [Tooltip("Drag a YOLO model .onnx file here")]
@@ -40,6 +55,7 @@ public class RunYOLO : MonoBehaviour
     private Worker worker;
     private string[] labels;
     private RenderTexture targetRT;
+    private Material yoloInputPreprocessMaterial;
     private Sprite borderSprite;
     private bool isModelLoaded = false;
 
@@ -73,6 +89,19 @@ public class RunYOLO : MonoBehaviour
 
     [Header("Demo JSON Export")]
     [SerializeField] private bool filterJsonObjectsByDistance = true;
+    [SerializeField] private bool useHighDetailDemoPolygonExport = true;
+    [SerializeField, Range(160, 640)] private int demoMaskResolution = 320;
+    [SerializeField] private bool limitDemoPolygonPoints = false;
+    [SerializeField, Min(8)] private int maxDemoPolygonPoints = 256;
+
+    [Header("YOLO Input Preprocess")]
+    [SerializeField] private Shader yoloInputPreprocessShader;
+    [SerializeField] private YoloInputAspectMode yoloInputAspectMode = YoloInputAspectMode.Stretch;
+    [SerializeField] private bool flipYForYoloInput = true;
+    [SerializeField] private bool useDemoYoloInputTransform = true;
+    [SerializeField] private YoloInputRotation demoYoloInputRotation = YoloInputRotation.None;
+    [SerializeField] private bool flipDemoYoloInputX = false;
+    [SerializeField] private bool flipDemoYoloInputY = false;
 
     [Tooltip("거리 측정된 물체 중 폴리곤을 표시할 최대 개수 (가까운 순)")]
     [SerializeField] private int nearestPolygonCount = 3;
@@ -104,6 +133,13 @@ public class RunYOLO : MonoBehaviour
 
         targetRT = new RenderTexture(imageWidth, imageHeight, 0);
         inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth));
+        Shader preprocessShader = yoloInputPreprocessShader != null
+            ? yoloInputPreprocessShader
+            : Shader.Find("Hidden/YOLO/InputPreprocess");
+        if (preprocessShader != null)
+        {
+            yoloInputPreprocessMaterial = new Material(preprocessShader);
+        }
 
         displayLocation = displayImage.transform;
         borderSprite = Sprite.Create(borderTexture, new Rect(0, 0, borderTexture.width, borderTexture.height), new Vector2(borderTexture.width / 2, borderTexture.height / 2));
@@ -134,6 +170,12 @@ public class RunYOLO : MonoBehaviour
             Destroy(targetRT);
             targetRT = null;
         }
+
+        if (yoloInputPreprocessMaterial != null)
+        {
+            Destroy(yoloInputPreprocessMaterial);
+            yoloInputPreprocessMaterial = null;
+        }
     }
 
     public IEnumerator ExecuteML(Texture sourceTexture, Quaternion captureAttitude = default)
@@ -143,7 +185,7 @@ public class RunYOLO : MonoBehaviour
         if (sourceTexture == null) yield break;
 
         // UV 좌표의 Y축을 반전시켜 텍스처를 상하로 뒤집어 targetRT에 복사
-        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+        PrepareYoloInput(sourceTexture, false);
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
 
@@ -326,7 +368,7 @@ public class RunYOLO : MonoBehaviour
         }
 
         // UV 좌표의 Y축을 반전시켜 텍스처를 상하로 뒤집어 targetRT에 복사
-        Graphics.Blit(sourceTexture, targetRT, new Vector2(1, -1), new Vector2(0, 1));
+        PrepareYoloInput(sourceTexture, true);
 
         TextureConverter.ToTensor(targetRT, inputTensor, default);
 
@@ -362,6 +404,8 @@ public class RunYOLO : MonoBehaviour
         int numMaskWeights = 32;
         int numClasses = numAttributes - 4 - numMaskWeights;
         bool isTransposed = dim1 == numAnchors;
+        int activeMaskResolution = GetDemoExportMaskResolution(drawPolygon);
+        int prototypeResolution = GetPrototypeResolution(output1.shape);
 
         var outputData0 = output0.DownloadToNativeArray();
         var outputData1 = output1.DownloadToNativeArray();
@@ -417,7 +461,7 @@ public class RunYOLO : MonoBehaviour
             if (numBoxes > 0)
             {
                 var perObjectMasks =
-                    new NativeArray<byte>(numBoxes * maskResolution * maskResolution, Allocator.TempJob);
+                    new NativeArray<byte>(numBoxes * activeMaskResolution * activeMaskResolution, Allocator.TempJob);
 
                 try
                 {
@@ -427,12 +471,13 @@ public class RunYOLO : MonoBehaviour
                         boxes = resultBoxes.AsArray().GetSubArray(0, numBoxes),
                         maskWeights = resultWeights.AsArray().GetSubArray(0, numBoxes * numMaskWeights),
                         perObjectMasks = perObjectMasks,
-                        maskRes = maskResolution,
+                        maskRes = activeMaskResolution,
+                        protoRes = prototypeResolution,
                         imgRes = imageWidth,
                         numMaskWeights = numMaskWeights
                     };
 
-                    maskJob.Schedule(maskResolution * maskResolution, 64).Complete();
+                    maskJob.Schedule(activeMaskResolution * activeMaskResolution, 64).Complete();
 
                     Quaternion currentAttitude = Input.gyro.enabled
                         ? Input.gyro.attitude
@@ -451,9 +496,14 @@ public class RunYOLO : MonoBehaviour
 
                         var contourPoints = MarchingSquaresUtil.GetContour(
                             perObjectMasks,
-                            maskResolution,
+                            activeMaskResolution,
                             i
                         );
+
+                        if (!drawPolygon && limitDemoPolygonPoints)
+                        {
+                            contourPoints = LimitPolygonPoints(contourPoints, maxDemoPolygonPoints);
+                        }
 
                         if (contourPoints.Count < 3)
                             continue;
@@ -463,8 +513,8 @@ public class RunYOLO : MonoBehaviour
                         for (int p = 0; p < contourPoints.Count; p++)
                         {
                             Vector2 normalized = new Vector2(
-                                contourPoints[p].x / maskResolution,
-                                1.0f - contourPoints[p].y / maskResolution
+                                contourPoints[p].x / activeMaskResolution,
+                                1.0f - contourPoints[p].y / activeMaskResolution
                             );
 
                             canvasPoints[p] = CompensateRotation(
@@ -622,6 +672,74 @@ public class RunYOLO : MonoBehaviour
         return showSet;
     }
 
+    private void PrepareYoloInput(Texture sourceTexture, bool isDemoInput)
+    {
+        if (yoloInputPreprocessMaterial == null || !RequiresMaterialYoloPreprocess(isDemoInput))
+        {
+            Vector2 scale = flipYForYoloInput
+                ? new Vector2(1f, -1f)
+                : Vector2.one;
+
+            Vector2 offset = flipYForYoloInput
+                ? new Vector2(0f, 1f)
+                : Vector2.zero;
+
+            Graphics.Blit(sourceTexture, targetRT, scale, offset);
+            return;
+        }
+
+        ConfigureYoloInputPreprocessMaterial(sourceTexture, isDemoInput);
+        Graphics.Blit(sourceTexture, targetRT, yoloInputPreprocessMaterial);
+    }
+
+    private bool RequiresMaterialYoloPreprocess(bool isDemoInput)
+    {
+        if (yoloInputAspectMode != YoloInputAspectMode.Stretch)
+        {
+            return true;
+        }
+
+        if (!isDemoInput || !useDemoYoloInputTransform)
+        {
+            return false;
+        }
+
+        return demoYoloInputRotation != YoloInputRotation.None
+            || flipDemoYoloInputX
+            || flipDemoYoloInputY;
+    }
+
+    private void ConfigureYoloInputPreprocessMaterial(Texture sourceTexture, bool isDemoInput)
+    {
+        int rotationSteps = 0;
+        float flipX = 0f;
+        float flipY = flipYForYoloInput ? 1f : 0f;
+
+        if (isDemoInput && useDemoYoloInputTransform)
+        {
+            rotationSteps = (int)demoYoloInputRotation;
+            flipX = flipDemoYoloInputX ? 1f : 0f;
+
+            if (flipDemoYoloInputY)
+            {
+                flipY = flipY > 0.5f ? 0f : 1f;
+            }
+        }
+
+        yoloInputPreprocessMaterial.SetFloat("_AspectMode", (float)yoloInputAspectMode);
+        yoloInputPreprocessMaterial.SetFloat("_RotationSteps", rotationSteps);
+        yoloInputPreprocessMaterial.SetFloat("_FlipX", flipX);
+        yoloInputPreprocessMaterial.SetFloat("_FlipY", flipY);
+        yoloInputPreprocessMaterial.SetVector(
+            "_SourceSize",
+            new Vector4(sourceTexture.width, sourceTexture.height, 0f, 0f)
+        );
+        yoloInputPreprocessMaterial.SetVector(
+            "_TargetSize",
+            new Vector4(imageWidth, imageHeight, 0f, 0f)
+        );
+    }
+
     private HashSet<int> BuildAllObjectSet(int numBoxes)
     {
         var showSet = new HashSet<int>();
@@ -632,6 +750,52 @@ public class RunYOLO : MonoBehaviour
         }
 
         return showSet;
+    }
+
+    private int GetDemoExportMaskResolution(bool drawPolygon)
+    {
+        if (drawPolygon || !useHighDetailDemoPolygonExport)
+            return maskResolution;
+
+        return Mathf.Max(maskResolution, demoMaskResolution);
+    }
+
+    private int GetPrototypeResolution(TensorShape shape)
+    {
+        if (shape.rank >= 2)
+        {
+            int width = shape[shape.rank - 1];
+            int height = shape[shape.rank - 2];
+
+            if (width == height && width > 0)
+            {
+                return width;
+            }
+        }
+
+        return maskResolution;
+    }
+
+    private List<Vector2> LimitPolygonPoints(List<Vector2> points, int maxPoints)
+    {
+        if (points == null || maxPoints <= 0 || points.Count <= maxPoints)
+            return points;
+
+        var limited = new List<Vector2>(maxPoints);
+        float step = (float)points.Count / maxPoints;
+
+        for (int i = 0; i < maxPoints; i++)
+        {
+            int index = Mathf.Min(points.Count - 1, Mathf.FloorToInt(i * step));
+            limited.Add(points[index]);
+        }
+
+        if (limited.Count >= 2)
+        {
+            limited[limited.Count - 1] = limited[0];
+        }
+
+        return limited;
     }
 
     // 캡처 시점과 현재 사이의 카메라 회전 변화량을 이용해 2D 정규화 좌표를 보정한다.
@@ -839,6 +1003,7 @@ public struct MaskGenerationJob : IJobParallelFor
     public NativeArray<byte> perObjectMasks;
 
     public int maskRes;
+    public int protoRes;
     public int imgRes;
     public int numMaskWeights;
 
@@ -848,6 +1013,7 @@ public struct MaskGenerationJob : IJobParallelFor
 
         int x = index % maskRes;
         int y = index / maskRes;
+        int activeProtoRes = protoRes > 0 ? protoRes : maskRes;
 
         float scale = (float)imgRes / maskRes;
         float imgX = x * scale;
@@ -865,8 +1031,8 @@ public struct MaskGenerationJob : IJobParallelFor
             int weightBase = b * numMaskWeights;
             for (int p = 0; p < numMaskWeights; p++)
             {
-                int protoIdx = p * (maskRes * maskRes) + y * maskRes + x;
-                maskVal += maskWeights[weightBase + p] * prototypes[protoIdx];
+                maskVal += maskWeights[weightBase + p] *
+                           SamplePrototypeBilinear(p, x, y, activeProtoRes);
             }
 
             float sigmoid = 1f / (1f + math.exp(-maskVal));
@@ -877,5 +1043,34 @@ public struct MaskGenerationJob : IJobParallelFor
                 perObjectMasks[b * maskRes * maskRes + y * maskRes + x] = 1;
             }
         }
+    }
+
+    private float SamplePrototypeBilinear(int channel, int x, int y, int activeProtoRes)
+    {
+        float srcX = maskRes > 1
+            ? (float)x * (activeProtoRes - 1) / (maskRes - 1)
+            : 0f;
+
+        float srcY = maskRes > 1
+            ? (float)y * (activeProtoRes - 1) / (maskRes - 1)
+            : 0f;
+
+        int x0 = (int)math.floor(srcX);
+        int y0 = (int)math.floor(srcY);
+        int x1 = math.min(x0 + 1, activeProtoRes - 1);
+        int y1 = math.min(y0 + 1, activeProtoRes - 1);
+
+        float tx = srcX - x0;
+        float ty = srcY - y0;
+        int channelOffset = channel * activeProtoRes * activeProtoRes;
+
+        float v00 = prototypes[channelOffset + y0 * activeProtoRes + x0];
+        float v10 = prototypes[channelOffset + y0 * activeProtoRes + x1];
+        float v01 = prototypes[channelOffset + y1 * activeProtoRes + x0];
+        float v11 = prototypes[channelOffset + y1 * activeProtoRes + x1];
+
+        float top = math.lerp(v00, v10, tx);
+        float bottom = math.lerp(v01, v11, tx);
+        return math.lerp(top, bottom, ty);
     }
 }
